@@ -1791,9 +1791,9 @@ iMapsManager.pushSeries = function (id, data) {
 
   if (!Array.isArray(im.maps[id].seriesIndex[data.map])) {
     im.maps[id].seriesIndex[cleanMapName] = [];
-  } // to allow empty maps to overlay, we removed the check && data.regions.length and send empty array
-
-
+  } 
+  
+  // to allow empty maps to overlay, we removed the check && data.regions.length and send empty array
   if (!Array.isArray(data.regions)) {
     data.regions = [];
   }
@@ -1806,7 +1806,18 @@ iMapsManager.pushSeries = function (id, data) {
   // but other overlays and empty maps might need to be added...
 
 
-  if (im.bool(parentData.allowEmpty) || data.regions.length) {
+  if (data.regions.length) {
+    // in case we don't allow empty, we only include the active regions
+    if (!im.bool(parentData.allowEmpty)){
+        data.include = [];
+        data.regions.forEach(function (region, index) {
+          data.include.push(region.id);
+          if (!isNaN(region.id)) {
+            data.include.push(parseInt(region.id));
+          }
+        });
+    }
+
     regionSeries = iMapsManager.pushRegionSeries(id, data);
     seriesIndex[cleanMapName].push(regionSeries);
     seriesById[data.id].push(regionSeries);

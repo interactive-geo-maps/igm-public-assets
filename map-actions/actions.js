@@ -274,7 +274,6 @@ iMapsActions.buildFilter = function (el) {
 				}
 			} else {
 				if (typeof iMapsManager !== 'undefined') {
-					console.log('hide all',keepBase);
 					iMapsManager.hideAllSeries(mainID, keepBase);
 					var thisSeries = iMaps.maps[mainID].seriesById[thisMapID];
 					if (thisSeries && thisSeries.length > 0) {
