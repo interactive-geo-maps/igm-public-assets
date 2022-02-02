@@ -132,6 +132,13 @@ ul.igm-external-legend {
 	padding: 5px 10px;
 }
 
+.igm_show_on_mobile {
+	display:none;
+}
+.igm_hide_on_mobile {
+	display:block;
+}
+
 @media only screen and (max-width: 768px) {
 	.map_box.igm_content_left_2_3 {
 		width: 100% !important;
@@ -143,5 +150,13 @@ ul.igm-external-legend {
 
 	.igm_content_gutter {
 		display: none;
+	}
+
+	.igm_show_on_mobile {
+		display:block;
+	}
+
+	.igm_hide_on_mobile {
+		display:none;
 	}
 }

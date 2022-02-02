@@ -654,7 +654,7 @@ iMapsModel.prepareEntriesData = function (data) {
 
       if (data.roundMarkersMobileSize && parseInt(data.roundMarkersMobileSize) !== 100) {
         if (window.innerWidth <= 780) {
-          marker.radius = parseInt(marker.radius) * parseInt(data.roundMarkersMobileSize) / 100;
+          marker.radius = parseFloat(marker.radius) * parseFloat(data.roundMarkersMobileSize) / 100;
         }
       }
 
@@ -742,7 +742,7 @@ iMapsModel.prepareEntriesData = function (data) {
 
       if (data.iconMarkersMobileSize && parseInt(data.iconMarkersMobileSize) !== 100) {
         if (window.innerWidth <= 780) {
-          marker.scale = parseInt(marker.scale) * parseInt(data.iconMarkersMobileSize) / 100;
+          marker.scale = parseFloat(marker.scale) * parseFloat(data.iconMarkersMobileSize) / 100;
         }
       }
 
@@ -791,7 +791,7 @@ iMapsModel.prepareEntriesData = function (data) {
 
       if (data.imageMarkersMobileSize && parseInt(data.imageMarkersMobileSize) !== 100) {
         if (window.innerWidth <= 780) {
-          marker.size = parseInt(marker.size) * parseInt(data.imageMarkersMobileSize) / 100;
+          marker.size = parseFloat(marker.size) * parseFloat(data.imageMarkersMobileSize) / 100;
         }
       }
 
@@ -1067,6 +1067,7 @@ iMapsManager.addMap = function (index) {
     seriesById: {},
     data: data,
     allBaseSeries: [],
+    labelSeries:[],
     baseRegionSeries: {},
     groupedBaseRegionSeries: []
   };
@@ -1513,6 +1514,7 @@ iMapsManager.handleZoom = function (id) {
     map.chartContainer.background.events.disableType("doublehit");
     map.seriesContainer.draggable = false;
     map.seriesContainer.resizable = false;
+    map.chartContainer.wheelable = false;
   } else {
     // mouse wheel zoom
     map.chartContainer.wheelable = im.bool(data.zoom.wheelable); // double click zoom
@@ -1742,7 +1744,7 @@ iMapsManager.pushGroupSeries = function (id, data) {
     newData.regionsGroupHover = true;
     newData.regions = group;
     newData.include = include; // include only the regions we're grouping
-    regionSerie = iMapsManager.pushRegionSeries(id, newData);
+    regionSerie = iMapsManager.pushRegionSeries(id, newData, true);
     series.push(regionSerie);
   });
   return series;
@@ -1924,7 +1926,7 @@ iMapsManager.pushSeries = function (id, data) {
   }
 };
 
-iMapsManager.pushRegionSeries = function (id, data) {
+iMapsManager.pushRegionSeries = function (id, data, groupHover) {
   var im = this,
     map = im.maps[id].map,
     // shorter reference for the map
@@ -1936,7 +1938,7 @@ iMapsManager.pushRegionSeries = function (id, data) {
     highlight,
     mapVar,
     clkLabel,
-    groupHover = im.bool(data.regionsGroupHover);
+    groupHover = groupHover || false;
   data = data || {};
   regionSeries = map.series.push(new am4maps.MapPolygonSeries());
 
@@ -1951,12 +1953,15 @@ iMapsManager.pushRegionSeries = function (id, data) {
   regionSeries.hiddenInLegend = data.regionLegend ? !im.bool(data.regionLegend.enabled) : true; // if it's a base series
 
   if (id === data.id) {
-    // add it as the baseSeries
-    im.maps[id].baseSeries = regionSeries;
+    // add it as the baseSeries - which will contain all region base series
+    if( typeof im.maps[id].baseSeries === 'undefined' ){
+      im.maps[id].baseSeries = [];
+    }
+    im.maps[id].baseSeries.push(regionSeries);
     im.maps[id].allBaseSeries.push(regionSeries);
-  } // Make map load polygon (like country names) data from GeoJSON
-
-
+  } 
+  
+  // Make map load polygon (like country names) data from GeoJSON
   regionSeries.useGeodata = true; // Exclude
 
   if (Array.isArray(data.exclude) && data.exclude.length) {
@@ -2073,7 +2078,9 @@ iMapsManager.pushRegionSeries = function (id, data) {
     regionTemplate.events.on("hit", function (ev) {
       im.groupHit(id, ev);
     });
+
   } else {
+
     regionTemplate.events.on("hit", function (ev) {
       im.singleHit(id, ev);
     });
@@ -2101,6 +2108,9 @@ iMapsManager.pushRegionSeries = function (id, data) {
 
     var labelSeries = map.series.push(new am4maps.MapImageSeries());
     var labelTemplate = labelSeries.mapImages.template.createChild(am4core.Label);
+    
+    im.maps[id].labelSeries.push(labelSeries);
+    
     labelTemplate.horizontalCenter = data.regionLabels.horizontalCenter;
     labelTemplate.verticalCenter = data.regionLabels.verticalCenter;
     labelTemplate.fontSize = data.regionLabels.fontSize;
@@ -2345,8 +2355,9 @@ iMapsManager.pushRoundMarkerSeries = function (id, data) {
     highlightState.propertyFields.fill = "hover"; // text label below
 
     if (data.roundMarkerLabels && im.bool(data.roundMarkerLabels.enabled)) {
+
       var markerLabel = markerSeriesTemplate.createChild(am4core.Label);
-      markerLabel.text = typeof data.roundMarkerLabels.source !== undefined && data.roundMarkerLabels.source !== '' ? data.roundMarkerLabels.source : "{name}";
+      markerLabel.text = typeof data.roundMarkerLabels.source !== "undefined" && data.roundMarkerLabels.source !== '' ? data.roundMarkerLabels.source : "{name}";
       markerLabel.horizontalCenter = "middle";
       markerLabel.fontSize = data.roundMarkerLabels.fontSize;
       markerLabel.nonScaling = true; //im.bool(data.roundMarkerLabels.nonScaling);
@@ -2526,7 +2537,7 @@ iMapsManager.pushIconMarkerSeries = function (id, data) {
 
     if (data.iconMarkerLabels && im.bool(data.iconMarkerLabels.enabled)) {
       var markerLabel = markerSeriesTemplate.createChild(am4core.Label);
-      markerLabel.text = typeof data.iconMarkerLabels.source !== undefined && data.iconMarkerLabels.source !== '' ? data.iconMarkerLabels.source : "{name}";
+      markerLabel.text = typeof data.iconMarkerLabels.source !== "undefined" && data.iconMarkerLabels.source !== '' ? data.iconMarkerLabels.source : "{name}";
       markerLabel.horizontalCenter = "middle";
       markerLabel.verticalCenter = "top";
       markerLabel.fontSize = data.iconMarkerLabels.fontSize;
@@ -2757,7 +2768,7 @@ iMapsManager.pushLabelSeries = function (id, data) {
     map.smallMap.series.push(labelSeries);
   } // add this series to map series to reference it later if needed
 
-
+  im.maps[id].labelSeries.push(labelSeries);
   im.maps[id].series.push(labelSeries); // if part of the parent map
 
   if (id === data.id) {
@@ -3032,6 +3043,7 @@ iMapsManager.zoomToRegion = function (ev, id) {
     seriesType = im.getTargetSeriesType(ev.target),
     data = im.maps[id].data,
     map = im.maps[id].map,
+    markerZoomLevel,
     dataContext; // do nothing if we clicked a label
 
   if (ev.target.isLabels) {
@@ -3044,7 +3056,8 @@ iMapsManager.zoomToRegion = function (ev, id) {
     // if it's a cluster marker
     if (dataContext.cluster) { //do nothing, we already zoomed
     } else {
-      ev.target.series.chart.zoomToMapObject(ev.target, ev.target.parent.chart.zoomLevel * 2, true);
+      markerZoomLevel = typeof igmMarkerZoomLevelOnClick !== 'undefined' ? igmMarkerZoomLevelOnClick : ev.target.parent.chart.zoomLevel * 2;
+      ev.target.series.chart.zoomToMapObject(ev.target, markerZoomLevel, true);
     }
   } else {
     if (dataContext.id === "asia") {
@@ -3100,7 +3113,7 @@ iMapsManager.setupHoverEvents = function (id, ev) {
     ev.target.cursorOverStyle = am4core.MouseCursorStyle.pointer;
   }
 
-  if (Array.isArray(selected) && !selected.includes(ev.target)) {
+  if (Array.isArray(selected) && !selected.includes(ev.target) && ev.target.dataItem && typeof ev.target.dataItem.dataContext.madeFromGeoData === 'undefined' ) {
     selected.forEach(function (sel, index) {
       if (typeof sel === 'object' && typeof sel.isHover !== 'undefined') {
         sel.isHover = false;
@@ -3315,6 +3328,7 @@ iMapsManager.select = function (id, elID, forceFixedTooltip, showTooltip, series
     seriesByID = iMaps.maps[id].seriesById,
     thisSeries = false,
     ogID,
+    customRegionGroup = true,
     triggered = false, // temp solution to prevent map from triggering multiple click actions if there are entries with same ID in different layers
     isGroup = false;
 
@@ -3359,9 +3373,6 @@ iMapsManager.select = function (id, elID, forceFixedTooltip, showTooltip, series
     series = thisSeries;
   }
 
-
-
-
   if (Array.isArray(series)) {
     for (var i = 0, len = series.length; i < len; i++) {
 
@@ -3377,6 +3388,7 @@ iMapsManager.select = function (id, elID, forceFixedTooltip, showTooltip, series
       if (series[i].mapPolygons) {
 
         //first trigger click
+        // this might return false if there is no entry created for this group and we are selecting programatically
         select = series[i].getPolygonById(elID);
 
         if (select && typeof select.dataItem.dataContext.originalID !== 'undefined' && select.dataItem.dataContext.originalID.includes(',')) {
@@ -3386,50 +3398,53 @@ iMapsManager.select = function (id, elID, forceFixedTooltip, showTooltip, series
         // check if group
         if (elID.includes(',')) {
 
-          if (select) {
+          if (typeof select !== 'undefined' && select) {
+
             select.tooltip = false;
             select.dispatchImmediately("hit");
+            select.hideTooltip();
+
+            customRegionGroup = false;
+            
             // reset true click events controller
             iMaps.maps[id].activeStateControl = true;
-            triggered = true;
-
+            
           }
 
-          //then hilight
+          //then hilight the first one
           group = elID.split(',');
           group.forEach(function (rxid, indx) {
 
             select = series[i].getPolygonById(rxid.trim());
-            if (select) {
+
+            if (typeof select !== 'undefined' && select) {
+
               if (select.dataItem.dataContext.madeFromGeoData) {
                 return;
               }
 
               // if originalID is not the same as the current originalID from the group, let's ignore it, it could belong to another group
-              if (select.dataItem.dataContext.originalID !== elID) {
+              if (select.dataItem.dataContext.originalID !== elID && !customRegionGroup) {
                 return;
               }
 
               //the first one, let's trigger the tooltip and the hit
-              if (indx === 0 && showTooltip && select.dataItem.dataContext.originalID === elID) {
+              if (indx === 0 && showTooltip) {
 
+                triggered = true;
                 if (forceFixedTooltip) {
 
-                  defaultTooltipPosition = select.tooltipPosition;
+                  defaultTooltipPosition = typeof select !== 'undefined' && typeof select.tooltipPosition !== 'undefined' ? select.tooltipPosition : 'hover';
                   select.tooltipPosition = 'fixed';
 
                   // experimental code to check if on hit tooltip remains
                   defaultTooltipShowOn = select.showTooltipOn;
                   select.showTooltipOn = 'always';
 
-
-                  select.dispatchImmediately("hit");
-                  triggered = true;
                   iMaps.maps[id].activeStateControl = true;
 
                   select.tooltipPosition = defaultTooltipPosition;
                   select.showTooltipOn = defaultTooltipShowOn;
-
 
                 } else {
                   select.isHover = true;
@@ -3448,50 +3463,72 @@ iMapsManager.select = function (id, elID, forceFixedTooltip, showTooltip, series
             }
           });
         } else {
+
+
+          // individual region
           select = series[i].getPolygonById(elID);
 
-          if (select) {
-            if (forceFixedTooltip) {
-              defaultTooltipPosition = select.tooltipPosition;
-              select.tooltipPosition = 'fixed';
+          if (typeof select !== 'undefined' && select) {
 
-              // experimental code to check if on hit tooltip remains
-              defaultTooltipShowOn = select.showTooltipOn;
-              select.showTooltipOn = 'always';
+            let timeout = 0;
+             //check if globe to rotate
+             if (data.projection === 'Orthographic' ) {
+              let map = iMaps.maps[id].map;
+              map.animate( { property: "deltaLongitude", to: -select.longitude }, 500, am4core.ease.linear);
+              map.animate( { property: "deltaLatitude", to: -select.latitude }, 550, am4core.ease.linear);
+              timeout = 550;
+            } 
 
+            setTimeout(function(select){
 
-              select.dispatchImmediately("hit");
-              triggered = true;
+              console.log( select.dataItem.dataContext );
 
-              select.tooltipPosition = defaultTooltipPosition;
-              select.showTooltipOn = defaultTooltipShowOn;
+              if (forceFixedTooltip && select.dataItem.dataContext && select.dataItem.dataContext.action !== 'igm_display_map' ) {
+                defaultTooltipPosition = typeof select !== 'undefined' && typeof select.tooltipPosition !== 'undefined' ? select.tooltipPosition : 'hover';
+                select.tooltipPosition = 'fixed';
+                // experimental code to check if on hit tooltip remains
+                defaultTooltipShowOn = select.showTooltipOn;
+                select.showTooltipOn = 'always';
+                select.dispatchImmediately("hit");
+                triggered = true;
+                select.tooltipPosition = defaultTooltipPosition;
+                select.showTooltipOn = defaultTooltipShowOn;
+                selected.push(select);
+              } 
+              // if action is set to display map it will zoom and we don't need to show tooltip
+              else if (select.dataItem.dataContext && select.dataItem.dataContext.action === 'igm_display_map') {
 
-              selected.push(select);
-
-            } else {
-              select.dispatchImmediately("hit");
-              triggered = true;
-              selected.push(select);
-            }
+                select.dispatchImmediately("hit");
+                select.hideTooltip();
+                triggered = true;
+                selected.push(select);
+              }
+              else {
+                select.dispatchImmediately("hit");
+                triggered = true;
+                selected.push(select);
+              }
+            },timeout, select);
+            
           }
         }
       }
       // imageSeries
       if (series[i].mapImages) {
-        // mutiple
+        // mutiple markers
         if (elID.includes(',')) {
           // hilight
           group = elID.split(',');
           group.forEach(function (rxid, indx) {
             select = series[i].getImageById(rxid);
 
-            if (select) {
+            if (typeof select !== 'undefined' && select) {
               if (forceFixedTooltip) {
 
                 defaultTooltipShowOn = select.showTooltipOn;
                 select.showTooltipOn = 'always';
 
-                defaultTooltipPosition = select.tooltipPosition;
+                defaultTooltipPosition = typeof select && typeof select.tooltipPosition !== 'undefined' ? select.tooltipPosition : 'hover';
                 select.tooltipPosition = 'fixed';
                 select.dispatchImmediately("hit");
                 triggered = true;
@@ -3505,29 +3542,47 @@ iMapsManager.select = function (id, elID, forceFixedTooltip, showTooltip, series
               }
             }
           });
-        } else {
-          select = series[i].getImageById(elID);
-          if (select) {
-            if (forceFixedTooltip) {
-              defaultTooltipPosition = select.tooltipPosition;
-              defaultTooltipShowOn = select.showTooltipOn;
-              select.tooltipPosition = 'fixed';
-              select.showTooltipOn = 'always';
-              select.isHover = true;
-              select.isActive = true;
+        } 
+        // single marker 
+        else {
+          let selectMarker = series[i].getImageById(elID);
+          if (selectMarker) {
+            let timeoutM = 0;
+             //check if globe to rotate
+             if (data.projection === 'Orthographic' ) {
+              let map = iMaps.maps[id].map;
+              map.animate( { property: "deltaLongitude", to: -selectMarker.longitude }, 500, am4core.ease.linear);
+              map.animate( { property: "deltaLatitude", to: -selectMarker.latitude }, 550, am4core.ease.linear);
+              timeoutM = 550;
+            } 
 
-              console.log(select.showTooltipOn);
-              // to also show tooltip when using the select method 
-              select.dispatchImmediately("hit");
-              triggered = true;
-              select.tooltipPosition = defaultTooltipPosition;
-              select.showTooltipOn = defaultTooltipShowOn;
-              selected.push(select);
-            } else {
-              select.dispatchImmediately("hit");
-              triggered = true;
-              selected.push(select);
-            }
+            setTimeout(function(){
+              if (forceFixedTooltip) {
+                defaultTooltipPosition = selectMarker.tooltipPosition;
+                defaultTooltipShowOn = selectMarker.showTooltipOn;
+                selectMarker.tooltipPosition = 'fixed';
+                selectMarker.showTooltipOn = 'always';
+                selectMarker.isHover = true;
+                selectMarker.isActive = true;
+                // to also show tooltip when using the select method 
+                selectMarker.dispatchImmediately("hit");
+                selectMarker.setState("active");
+                selectMarker.children.each(function(child){
+                  //if(child.className === 'Circle'){
+                    child.showTooltip(0);
+                  //}
+                });
+                triggered = true;
+                selectMarker.tooltipPosition = defaultTooltipPosition;
+                selectMarker.showTooltipOn = defaultTooltipShowOn;
+                selected.push(selectMarker);
+              } else {
+                selectMarker.dispatchImmediately("hit");
+                triggered = true;
+                selected.push(selectMarker);
+              }
+            },timeoutM);
+            
           }
         }
       }
@@ -3814,20 +3869,24 @@ iMapsManager.drillTo = function (id, ev, currentRegion, customMap) {
     allCurrentSeries = iMapsManager.maps[id].series,
     baseSeries = iMapsManager.maps[id].baseSeries,
     allBaseSeries = iMapsManager.maps[id].allBaseSeries,
+    opacity,
     i,
-    len; // hide all others except this one and baseSeries
+    len; 
+    
+    opacity = typeof igmDrilldownBaseMapOpacity !== 'undefined' ? igmDrilldownBaseMapOpacity : 0.3,
 
+
+   // hide all others except this one and baseSeries
   // if were opening a custom map
   customMap = customMap || false;
 
   // hide or fade series
   for (i = 0, len = allCurrentSeries.length; i < len; i++) {
-    if (baseSeries === allCurrentSeries[i]) {
+    if (baseSeries.includes(allCurrentSeries[i])) {
       // let's check if new option to keep base map is enabled
       if (typeof data.alwaysKeepBase === 'undefined' || !im.bool(data.alwaysKeepBase)) {
-        allCurrentSeries[i].opacity = 0.3;
+        allCurrentSeries[i].opacity = opacity;
       }
-
     } else if (allBaseSeries.includes(allCurrentSeries[i])) {
       // let's check if new option to keep base map is enabled
       if (typeof data.alwaysKeepBase === 'undefined' || !im.bool(data.alwaysKeepBase)) {
@@ -3840,9 +3899,8 @@ iMapsManager.drillTo = function (id, ev, currentRegion, customMap) {
 
   for (i = 0, len = currentRegion.length; i < len; i++) {
     currentRegion[i].show();
-  } // is drilling
-
-
+  } 
+  // is drilling
   iMapsManager.maps[id].isDrilling = true;
 
   // zoom to region - it will only work when zoom is enabled so that controls exist
@@ -3916,10 +3974,11 @@ iMapsManager.drillDown = function (id, ev) {
       } // if target is base series, show it
 
 
-      if (ev.target.series === baseSeries) {
+      if (baseSeries.includes( ev.target.series ) ) {
         iMapsManager.maps[id].isDrilling = false;
-        iMapsManager.maps[id].drilledTo = false; // hide all except baseSeries
-
+        iMapsManager.maps[id].drilledTo = false; 
+        
+        // hide all except baseSeries
         for (i = 0, len = allCurrentSeries.length; i < len; i++) {
           if (allBaseSeries.includes(allCurrentSeries[i])) {
             allCurrentSeries[i].show();
@@ -4058,6 +4117,7 @@ iMapsManager.hover = function (id, eID, forceFixedTooltip) {
     hovered = map.hovered || [],
     hover,
     group,
+    defaultShowTooltipOn,
     defaultTooltipPosition; // map sure it's string
 
   if (Number.isInteger(eID)) {
@@ -4069,10 +4129,7 @@ iMapsManager.hover = function (id, eID, forceFixedTooltip) {
     forceFixedTooltip = true;
   }
 
-  hovered.forEach(function (hov) {
-    hov.isHover = false;
-    hov.setState("default");
-  });
+  iMapsManager.clearHovered(id);
   hovered = [];
 
   if (Array.isArray(series)) {
@@ -4090,12 +4147,15 @@ iMapsManager.hover = function (id, eID, forceFixedTooltip) {
 
             if (hover) {
               if (forceFixedTooltip) {
-                defaultTooltipPosition = hover.tooltipPosition;
+                defaultTooltipPosition = typeof hover.tooltipPosition !== 'undefined' ? hover.tooltipPosition : 'fixed';
+                defaultShowTooltipOn = typeof hover.showTooltipOn  !== 'undefined' ? hover.showTooltipOn : 'hover';
                 hover.tooltipPosition = 'fixed';
+                hover.showTooltipOn = 'always';
                 hovered.push(hover);
                 hover.dispatchImmediately("over");
                 hover.isHover = true;
                 hover.tooltipPosition = defaultTooltipPosition;
+                hover.showTooltipOn = defaultShowTooltipOn;
               } else {
                 hovered.push(hover);
                 hover.dispatchImmediately("over");
@@ -4104,9 +4164,9 @@ iMapsManager.hover = function (id, eID, forceFixedTooltip) {
             }
           });
         } else {
-          // single
+          // single region
           hover = series[i].getPolygonById(eID);
-
+         
           if (hover) {
             if (forceFixedTooltip) {
               defaultTooltipPosition = hover.tooltipPosition;
@@ -4122,11 +4182,10 @@ iMapsManager.hover = function (id, eID, forceFixedTooltip) {
             }
           }
         }
-      } // imageSeries
-
-
+      } 
+      // imageSeries
       if (series[i].mapImages) {
-        // multiple
+        // multiple markers
         if (eID.includes(',')) {
           // foreach code
           group = eID.split(',');
@@ -4135,28 +4194,49 @@ iMapsManager.hover = function (id, eID, forceFixedTooltip) {
 
             if (hover) {
               if (forceFixedTooltip) {
-                hovered.push(hover);
+                defaultTooltipPosition = hover.tooltipPosition;
+                defaultShowTooltipOn = hover.showTooltipOn;
+                hover.tooltipPosition = 'fixed';
+                hover.showTooltipOn = 'always';
+                hovered = [hover];
                 hover.dispatchImmediately("over");
                 hover.isHover = true;
                 hover.setState("hover");
+                hover.children.each(function(child){
+                  if(child.className === 'Circle'){
+                    child.showTooltip(0);
+                  }
+                });
+                hover.tooltipPosition = defaultTooltipPosition;
+                hover.showTooltipOn = defaultShowTooltipOn;
               } else {
-                hovered.push(hover);
+                hovered = [hover];
                 hover.dispatchImmediately("over");
                 hover.isHover = true;
                 hover.setState("hover");
               }
             }
           });
-        } // single
+        } 
+        // single marker
         else {
+
           hover = series[i].getImageById(eID);
 
           if (hover) {
             if (forceFixedTooltip) {
+              defaultTooltipPosition = hover.tooltipPosition;
+              hover.tooltipPosition = 'fixed';
               hovered = [hover];
               hover.dispatchImmediately("over");
               hover.isHover = true;
               hover.setState("hover");
+              hover.children.each(function(child){
+                if(child.className === 'Circle'){
+                  child.showTooltip(0);
+                }
+              });
+              hover.tooltipPosition = defaultTooltipPosition;
             } else {
               hovered = [hover];
               hover.dispatchImmediately("over");
@@ -4184,7 +4264,7 @@ iMapsManager.clearHovered = function (id, eID) {
   if (eID) {
     if (Array.isArray(series)) {
       for (var i = 0, len = series.length; i < len; i++) {
-        // regionSeries
+        // regionSeries - specific region
         if (series[i].mapPolygons) {
           hover = series[i].getPolygonById(eID);
 
@@ -4192,9 +4272,9 @@ iMapsManager.clearHovered = function (id, eID) {
             hover.dispatchImmediately("out");
             hover.isHover = false;
           }
-        } // imageSeries
-
-
+        } 
+        
+        // imageSeries - specific marker
         if (series[i].mapImages) {
           hover = series[i].getImageById(eID);
 
@@ -4206,12 +4286,21 @@ iMapsManager.clearHovered = function (id, eID) {
         }
       }
     }
-  } else {
+  } 
+  // all of the regions or markers
+  else {
     if (hovered) {
       hovered.forEach(function (hov) {
-        hov.setState("default");
         hov.dispatchImmediately("out");
+        hov.setState("default");
         hov.isHover = false;
+        if(typeof hov.children !== 'undefined'){
+          hov.children.each(function(child){
+            if(child.className === 'Circle'){
+              child.hideTooltip(0);
+            }
+          });
+        }
       });
       map.hovered = [];
       return true;
@@ -4249,7 +4338,7 @@ iMapsManager.highlight = function (id, elID) {
           group.forEach(function (rxid, indx) {
             select = series[i].getPolygonById(rxid.trim());
 
-            if (select) {
+            if (typeof select !== 'undefined' && select) {
               if (select.dataItem.dataContext.madeFromGeoData) {
                 return;
               }
@@ -4261,7 +4350,7 @@ iMapsManager.highlight = function (id, elID) {
         } else {
           select = series[i].getPolygonById(elID);
 
-          if (select) {
+          if (typeof select !== 'undefined' && select) {
             select.setState("highlight");
             highlighted.push(select);
           }
@@ -4275,7 +4364,7 @@ iMapsManager.highlight = function (id, elID) {
           group.forEach(function (rxid, indx) {
             select = series[i].getImageById(rxid);
 
-            if (select) {
+            if (typeof select !== 'undefined' && select) {
               select.setStateOnChildren = true;
               select.setState("highlight");
               highlighted.push(select);
@@ -4284,7 +4373,7 @@ iMapsManager.highlight = function (id, elID) {
         } else {
           select = series[i].getImageById(elID);
 
-          if (select) {
+          if (typeof select !== 'undefined' && select) {
             select.setStateOnChildren = true;
             select.setState("highlight");
             highlighted.push(select);
@@ -4541,14 +4630,17 @@ iMapsManager.hideAllSeries = function (id, keepBase) {
   var map = iMaps.maps[id];
   var baseRegionSeries = map.baseRegionSeries;
   var groupedSeries = map.groupedBaseRegionSeries;
-  var baseSeries = map.allBaseSeries;
+  var allbaseSeries = map.allBaseSeries;
 
   for (var index = 0; index < map.series.length; index++) {
     var serie = map.series[index];
 
-    if (baseRegionSeries !== serie && !groupedSeries.includes(serie)) {
+    //if (baseRegionSeries !== serie && !groupedSeries.includes(serie)) {
+    // we don't need to check if it's not the base series at this point
+
+    if (!groupedSeries.includes(serie)) {
       // in case we need to check also if we keep base series
-      if (!keepBase || keepBase && !baseSeries.includes(serie)) {
+      if (!keepBase || keepBase && !allbaseSeries.includes(serie)) {
         serie.hide();
       }
     }

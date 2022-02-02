@@ -95,7 +95,7 @@ iMapsActions.init = function () {
 				var id = select.getAttribute('data-map-id');
 				id = parseInt(id);
 				if (typeof iMapsManager !== 'undefined') {
-					iMapsManager.select(id, select.value);
+					iMapsManager.select(id, select.value, true);
 					return;
 				}
 				if (select.getAttribute('data-url')) {
@@ -138,7 +138,7 @@ iMapsActions.buildDropdown = function (el) {
 		var id = el.getAttribute('data-map-id');
 		id = parseInt(id);
 		if (typeof iMapsManager !== 'undefined') {
-			iMapsManager.select(id, this.value);
+			iMapsManager.select(id, this.value, true);
 		}
 
 		if (el.getAttribute('data-url')) {
@@ -226,8 +226,10 @@ iMapsActions.buildDropdownFilter = function (el) {
 
 		// change this to a iMapsManager function that goes home and triggers event
 		// let's try to avoid using iMaps object in this file.
-		iMaps.maps[thisMapID].map.goHome();
-		iMaps.maps[thisMapID].map.dispatchImmediately("zoomlevelchanged");
+		if(typeof iMaps.maps[thisMapID] !== 'undefined'){
+			iMaps.maps[thisMapID].map.goHome();
+			iMaps.maps[thisMapID].map.dispatchImmediately("zoomlevelchanged");
+		}
 
 	});
 
@@ -272,6 +274,7 @@ iMapsActions.buildFilter = function (el) {
 				}
 			} else {
 				if (typeof iMapsManager !== 'undefined') {
+					console.log('hide all',keepBase);
 					iMapsManager.hideAllSeries(mainID, keepBase);
 					var thisSeries = iMaps.maps[mainID].seriesById[thisMapID];
 					if (thisSeries && thisSeries.length > 0) {
@@ -283,9 +286,10 @@ iMapsActions.buildFilter = function (el) {
 				}
 			}
 
-			iMaps.maps[mainID].map.goHome();
-			iMaps.maps[mainID].map.dispatchImmediately("zoomlevelchanged");
-
+			if(typeof iMaps.maps[mainID] !== 'undefined'){
+				iMaps.maps[mainID].map.goHome();
+				iMaps.maps[mainID].map.dispatchImmediately("zoomlevelchanged");
+			}
 
 		});
 	}
@@ -369,6 +373,9 @@ iMapsActions.lightboxAction = function (id, data, type) {
 	}
 
 	iMapsActions.lightbox.open();
+	iMapsActions.lightbox.on('close', function(){
+		iMapsManager.clearSelected(id);
+	});
 
 };
 iMapsActions.contentBelow = function (id, data, scroll) {
