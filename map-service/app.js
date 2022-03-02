@@ -76,28 +76,32 @@ geocluster.prototype._cluster = function (elements, bias, defaults, tooltipTempl
     diff = self._dist(elements[i].latitude, elements[i].longitude, elements[i - 1].latitude, elements[i - 1].longitude);
     tot_diff += diff;
     diffs.push(diff);
-  } // calculate mean diff
-
-
+  } 
+  
+  // calculate mean diff
   var mean_diff = tot_diff / diffs.length;
-  var diff_variance = 0; // calculate variance total
-
+  var diff_variance = 0; 
+  
+  // calculate variance total
   diffs.forEach(function (diff) {
     diff_variance += Math.pow(diff - mean_diff, 2);
-  }); // derive threshold from stdev and bias - modified to allow bias to be more decisive
-
+  }); 
+  
+  // derive threshold from stdev and bias - modified to allow bias to be more decisive
   var diff_stdev = Math.sqrt(diff_variance / diffs.length);
   var threshold = 10000 * bias;
-  var cluster_map = []; // generate random initial cluster map
-
+  var cluster_map = []; 
+  
+  // generate random initial cluster map
   cluster_map.push({
-    centroid: elements[Math.floor(Math.random() * elements.length)],
+    centroid: elements[Math.floor(0.5 * elements.length)],
     elements: [],
     fill: defaults.fill,
     hover: defaults.hover,
     radius: defaults.radius
-  }); // loop elements and distribute them to clusters
-
+  }); 
+  
+  // loop elements and distribute them to clusters
   var changing = true;
 
   while (changing === true) {
@@ -198,7 +202,7 @@ iMapsRouter.getGeoFiles = function (regionClicked) {
     urlappend,
     varappend,
     geoFiles = {},
-    continents = ["southAmerica", "northAmerica", "europe", "asia", "oceania", "africa", "antarctica"]; // continents
+    continents = ["southAmerica", "northAmerica", "europe", "middleEast", "asia", "oceania", "africa", "antarctica"]; // continents
 
   if (continents.includes(regionID)) {
     urlappend = "region/world/";
@@ -273,7 +277,7 @@ iMapsRouter.getCleanMapName = function (mapName, id) {
 
 iMapsRouter.iso2cleanName = function (iso, mapID) {
   var countries = iMapsRouter.getCountries();
-  var continents = ['africa', 'antarctiva', 'asia', 'europe', 'northAmerica', 'oceania', 'southAmerica'];
+  var continents = ['africa', 'antarctiva', 'asia', 'europe','middleEast', 'northAmerica', 'oceania', 'southAmerica'];
   var tempIso;
   var series = iMapsManager.maps[mapID].seriesIndex;
   var match = false;
@@ -315,6 +319,8 @@ iMapsRouter.iso2cleanName = function (iso, mapID) {
     tempIso = ['congoDR'];
   } else if ("CG" === iso) {
     tempIso = ['congo'];
+  } else if ("CZ" === iso) {
+    tempIso = ['czechRepublic','czechia'];
   } // the rest
 
 
@@ -438,9 +444,9 @@ iMapsModel.prepareMultiGeoLine = function (data) {
 
 iMapsModel.prepareImageFields = function (data) {
   // image markers
-  if (Array.isArray(data.imageMarkers) && data.imageMarkers.length) {
+  if (Array.isArray(data.imageMarkers) && Array.isArray( data.imageMarkers )) {
     data.imageMarkers.map(function (marker) {
-      if (marker.image) {
+      if (marker.image && ( Array.isArray( marker.image ) || typeof marker.image === 'object' )) {
         marker.href = marker.image.url;
       }
 
@@ -761,7 +767,7 @@ iMapsModel.prepareEntriesData = function (data) {
     data.imageMarkers.map(function (marker) {
       if (typeof marker.useDefaults === "undefined" || marker.useDefaults === "1") {
         Object.assign(marker, data.imageMarkerDefaults);
-      }
+      } 
 
       if (marker.coordinates) {
         marker.latitude = marker.coordinates.latitude;
@@ -773,11 +779,23 @@ iMapsModel.prepareEntriesData = function (data) {
         marker.nonScaling = iMapsManager.bool(marker.nonScaling);
       }
 
+      if (typeof marker.size === 'undefined') {
+        marker.size = data.imageMarkerDefaults.size;
+      }
+
+      if (typeof marker.horizontalCenter === 'undefined') {
+        marker.horizontalCenter = data.imageMarkerDefaults.horizontalCenter;
+      }
+
+      if (typeof marker.verticalCenter === 'undefined') {
+        marker.verticalCenter = data.imageMarkerDefaults.verticalCenter;
+      }
+
       if (typeof marker.name === 'undefined') {
         marker.name = marker.id;
       }
 
-      if (marker.action === "default") {
+      if (marker.action === "default" || typeof marker.action === 'undefined') {
         marker.action = data.imageMarkerDefaults.action;
       }
 
@@ -1805,8 +1823,8 @@ iMapsManager.pushSeries = function (id, data) {
   // reference: https://interactivegeomaps.com/feature/live-filter/
   // but other overlays and empty maps might need to be added...
 
-
-  if (data.regions.length) {
+  // we don't check if the regions.lenght exist, because maybe user wants to add an empty map, only to show divisions
+  if (data.regions.length || im.bool(parentData.allowEmpty)) {
     // in case we don't allow empty, we only include the active regions
     if (!im.bool(parentData.allowEmpty)){
         data.include = [];
@@ -1991,6 +2009,10 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
   // if (Array.isArray(data.regions)) {
 
   regionSeries.data = data.regions; // Configure series
+
+  if( groupHover ){
+    regionSeries.groupHover = true;
+  }
 
   regionTemplate = regionSeries.mapPolygons.template;
   im.setupTooltip(id, regionSeries, data); // check for custom tooltip template
@@ -2318,7 +2340,7 @@ iMapsManager.pushRoundMarkerSeries = function (id, data) {
     label.verticalCenter = "middle";
     label.horizontalCenter = "middle";
     label.nonScaling = true;
-    label.fontSize = data.markerDefaults.radius;
+    label.fontSize = typeof igmClusterMarkerFontSize !== 'undefined' ? igmClusterMarkerFontSize : data.markerDefaults.radius;
     label.clickable = false;
     label.focusable = false;
     label.hoverable = false; // check for custom tooltip template
@@ -2860,6 +2882,27 @@ iMapsManager.setupTooltip = function (id, series, data, marker) {
     if (series.mapPolygons) {
       series.calculateVisualCenter = true;
       series.mapPolygons.template.tooltipPosition = "fixed";
+
+      // in case it's a group and the tooltip is set to fixed, 
+      // we need to set the tooltip hover to have the regions keep the hover state
+      if( series.groupHover ){
+
+         // set to false so that the tooltip does not 
+        // inherit the highlight state color on hover
+        series.tooltip.getFillFromObject = false;
+        series.tooltip.events.on('over', function(ev) {
+          ev.target.dataItem.component.mapPolygons.each(function(polygon) {
+            polygon.setState("highlight");
+          }); 
+        });
+        series.tooltip.events.on('out', function(ev) {
+          ev.target.dataItem.component.mapPolygons.each(function(polygon) {
+            polygon.setState("default");
+          }); 
+        });
+
+      }
+
       series.tooltip.keepTargetHover = true;
 
       if (tooltip.showTooltipOn) {
@@ -2922,7 +2965,7 @@ iMapsManager.setupHitEvents = function (id, ev) {
   var im = this,
     data = im.maps[id].data,
     dataContext,
-    map = im.maps[id],
+    map = im.maps[id].map,
     customActionName,
     targetType = im.getTargetSeriesType(ev.target),
     clicked = im.maps[id].clicked || false,
@@ -2940,9 +2983,8 @@ iMapsManager.setupHitEvents = function (id, ev) {
     if (dataContext.cluster) {
       // if we're far from the max, let's just zoom half
       if (zoomCluster - parseInt(map.zoomLevel) > 5) {
-        zoomCluster = zoomCluster / 2;
+        zoomCluster = parseInt(map.zoomLevel) + (zoomCluster/2);
       }
-
       ev.target.series.chart.zoomToMapObject(ev.target, zoomCluster);
     }
   } // for admin log
@@ -3239,6 +3281,7 @@ iMapsManager.groupHoverOut = function (id, ev) {
     return;
   }
 
+
   ev.target.parent.mapPolygons.each(function (polygon) {
     if (!polygon.isGroupActive) {
       polygon.setState("default");
@@ -3367,11 +3410,14 @@ iMapsManager.select = function (id, elID, forceFixedTooltip, showTooltip, series
     thisSeries = seriesByID[seriesMapID];
   }
 
-  iMapsManager.clearSelected(id);
-
   if (typeof click === 'undefined') {
     click = true;
+  } else { 
+    click = false 
   }
+
+  // we pass the click as the 'skipReset' - if not a real click, its the hover and we skip the reset to prevent flickering
+  iMapsManager.clearSelected(id, false, ! click);
 
   if (click) {
     iMaps.maps[id].activeStateControl = true;
@@ -4062,12 +4108,13 @@ iMapsManager.getHighlighted = function (id) {
   }
 };
 
-iMapsManager.clearSelected = function (id, keepThis) {
+iMapsManager.clearSelected = function (id, keepThis, skipReset) {
   var im = this,
     map = im.maps[id],
     selected = map.selected || []; // to keep the state of this element
 
   keepThis = keepThis || false;
+  skipReset = skipReset || false;
 
   if (Array.isArray(selected) && selected.length > 0) {
     selected.forEach(function (polygon, index) {
@@ -4085,7 +4132,10 @@ iMapsManager.clearSelected = function (id, keepThis) {
   }
 
   if (!keepThis && typeof iMapsActions !== 'undefined') {
-    iMapsActions.resetActions(id);
+
+    if( ! skipReset ){
+      iMapsActions.resetActions(id);
+    }
     map.selected = [];
   } else {
     map.selected = [keepThis];
@@ -4427,11 +4477,13 @@ iMapsManager.setupClusters = function (data, id, overlay) {
     biasLevels.push(prevBias);
     prevBias = prevBias / 2;
     zoomLevels.push(maxZoomLevel);
-    maxZoomLevel = Math.ceil(maxZoomLevel / 2);
+
+    // make sure the last one is set to 1, otherwise it will be hidden
+    maxZoomLevel = i == 3 ? 1 : Math.ceil(maxZoomLevel / 2);
     i++;
-  } // reverse array to match detail level
-
-
+  } 
+  
+  // reverse array to match detail level
   zoomLevels.reverse().pop();
   biasLevels.pop();
 
@@ -4444,6 +4496,7 @@ iMapsManager.setupClusters = function (data, id, overlay) {
 
   if (Array.isArray(data.roundMarkers)) {
     biasLevels.forEach(function (item, index) {
+            
       series = geocluster(data.roundMarkers, item, data.markerDefaults, tooltipTemplate);
       tempData = Object.assign({}, data);
       tempData.roundMarkers = series;
@@ -4458,7 +4511,10 @@ iMapsManager.setupClusters = function (data, id, overlay) {
         // im.maps[id].allBaseSeries.push(markerSeries);
       }
 
-      markerSeries.hidden = true;
+      // hide all series except the first
+      //if (index > 0 ) {
+        markerSeries.hidden = true;
+      //}
     });
   }
 

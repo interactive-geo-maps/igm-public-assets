@@ -371,7 +371,12 @@ iMapsActions.lightboxAction = function (id, data, type) {
 		iMapsActions.lightbox = GLightbox(opts);
 	}
 
-	iMapsActions.lightbox.open();
+	if( data.content !== '' ){
+		iMapsActions.lightbox.open();
+	} else {
+		console.log('Empty Action Content - Lightbox not triggered');
+	}
+	
 	iMapsActions.lightbox.on('close', function(){
 		iMapsManager.clearSelected(id);
 	});
