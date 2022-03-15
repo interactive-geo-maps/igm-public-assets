@@ -2393,6 +2393,14 @@ iMapsManager.pushRoundMarkerSeries = function (id, data) {
       markerLabel.text = typeof data.roundMarkerLabels.source !== "undefined" && data.roundMarkerLabels.source !== '' ? data.roundMarkerLabels.source : "{name}";
       markerLabel.horizontalCenter = "middle";
       markerLabel.fontSize = data.roundMarkerLabels.fontSize;
+
+      //for mobile devices
+      if (data.roundMarkerLabels.mobileSize && parseInt(data.roundMarkerLabels.mobileSize) !== 100) {
+        if (window.innerWidth <= 780) {
+          markerLabel.fontSize = parseInt(data.roundMarkerLabels.fontSize) * parseInt(data.roundMarkerLabels.mobileSize) / 100;
+        }
+      }
+
       markerLabel.nonScaling = true; //im.bool(data.roundMarkerLabels.nonScaling);
 
       markerLabel.fill = data.roundMarkerLabels.fill;
@@ -3198,10 +3206,14 @@ iMapsManager.singleHit = function (id, ev) {
     iMaps.maps[id].mapClicked = true;
   }
 
+
+  // causes issues on tap on mobile, we need to click twice? 
+  // seems the clear selected is affecting
+  iMapsManager.clearSelected(id, ev.target, true );
+
   ev.target.isActive = true;
   ev.target.isHover = true;
   ev.target.setState("active");
-  iMapsManager.clearSelected(id, ev.target);
   im.maps[id].selected = [ev.target];
 };
 
@@ -3258,9 +3270,8 @@ iMapsManager.groupHover = function (id, ev) {
   }
 
   if (im.bool(dataContext.triggerClickOnHover) && (typeof iMaps.maps[id].mapClicked === 'undefined' || iMaps.maps[id].mapClicked === false)) {
-    iMapsManager.select(id, dataContext.id, false, false, dataContext.mapID, false);
+    iMapsManager.select(id, dataContext.id, false, true, dataContext.mapID, false);
   } // set mouse hover pointer cursor
-
 
   if (ev.target.dataItem.dataContext.action && ev.target.dataItem.dataContext.action != "none") {
     ev.target.cursorOverStyle = am4core.MouseCursorStyle.pointer;
@@ -4123,7 +4134,12 @@ iMapsManager.clearSelected = function (id, keepThis, skipReset) {
         polygon.isActive = false;
         polygon.isGroupActive = false;
 
+        // there were some issues on mobile tap (singleHit) where the tooltip woudl disappear, 
+        // so we added this check before hiding the tooltip
+       if ( ! keepThis ) {
         polygon.hideTooltip(0); // needed to hide tooltip
+       }
+
         polygon.setState("default");
 
       }
