@@ -17,7 +17,6 @@
 	height: 0;
 }
 
-
 .map_wrapper:fullscreen {
 	position: fixed;
 	top: 0;
@@ -35,6 +34,7 @@
 	padding-bottom: 100%;
 	overflow:hidden;
 }
+
 
 
 .map_wrapper .map_container {
@@ -160,8 +160,16 @@
 
 /* Elementor Preview */
 .elementor-editor-active .map_wrapper .map_render {
+	content: 'Map';
+	color: #FFF;
+	background-color: #CCC;
+	padding:20px;
+}
+
+.oxygen-body .map_wrapper .map_render {
 	content: 'map';
 	background-color: #CCC;
+	padding:20px;
 }
 
 /* List of Maps Styles */

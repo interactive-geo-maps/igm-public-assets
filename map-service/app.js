@@ -277,7 +277,7 @@ iMapsRouter.getCleanMapName = function (mapName, id) {
 
 iMapsRouter.iso2cleanName = function (iso, mapID) {
   var countries = iMapsRouter.getCountries();
-  var continents = ['africa', 'antarctiva', 'asia', 'europe','middleEast', 'northAmerica', 'oceania', 'southAmerica'];
+  var continents = ['africa', 'antarctiva', 'asia', 'europe','middleEast', 'northAmerica', 'oceania', 'southAmerica', 'centralAmerica'];
   var tempIso;
   var series = iMapsManager.maps[mapID].seriesIndex;
   var match = false;
@@ -428,6 +428,7 @@ iMapsModel.iterateData = function (data) {
   data = iMapsModel.prepareMultiGeoLine(data);
   return data;
 };
+
 
 iMapsModel.prepareMultiGeoLine = function (data) {
   if (Array.isArray(data.lines) && data.lines.length) {
@@ -700,6 +701,10 @@ iMapsModel.prepareEntriesData = function (data) {
         marker.triggerClickOnHover = true;
       }
 
+      if (typeof data.triggerRegionHover !== 'undefined' && data.triggerRegionHover.enabled === '1') {
+        marker.triggerRegionHover = true;
+      }
+
       marker.tooltipContent = iMapsModel.prepareTooltip(marker.tooltipContent, data.tooltip);
       marker.mapID = mapID;
       return marker;
@@ -932,7 +937,11 @@ iMapsModel.coordinatesToInt = function (data) {
         if (_typeof(Obj[key]) === "object") {
           if (key === "coordinates" || key === "homeGeoPoint") {
             convertCoordinates(key, Obj);
-          } else {
+          } 
+          else if (typeof Obj['className'] !== 'undefined' ) {
+            return;
+          }
+          else {
             iterateObj(Obj[key]);
           }
         }
@@ -943,12 +952,59 @@ iMapsModel.coordinatesToInt = function (data) {
   return data;
 };
 
+
 iMapsModel.prepareColor = function (data) {
   // prepare color fields
   var colorFields = ["inactiveColor", "activeColor", "hoverColor", "hover", "inactiveHoverColor", "backgroundColor", "color", "minColor", "maxColor", "fill", "projectionBackgroundColor", "borderColor", "borderColorHover"],
-    checkColor = function checkColor(key, obj) {
+  createGradient = function createGradient( data ){
+    var colours = data.split("|");
+    var gradient, gradientType, gradientOffset, colourIndex;
+    
+    gradientType   = typeof igmGradientType !== 'undefined' ? igmGradientType : 'LinearGradient';
+    
+    gradientOffset = typeof igmGradientOffset !== 'undefined' && Array.isArray(igmGradientOffset) ? igmGradientOffset : null;
+
+    gradient = new am4core[gradientType]();
+    colours.forEach(function(color, index){
+          gradient.addColor(am4core.color(color), 1, gradientOffset[index]);
+    });
+
+    //rotation
+    gradient.rotation = typeof igmGradientRotation !== 'undefined' ? igmGradientRotation : 0;
+    return gradient;
+  },
+  createPattern = function createPattern( data ) {
+    var url = data;
+    // Create pattern
+    var pattern = new am4core.Pattern();
+    pattern.width = 150;
+    pattern.height = 150;
+    pattern.strokeWidth = 0;
+    pattern.stroke = am4core.color('#6699cc');
+    //pattern.patternUnits = 'objectBoundingBox'; // objectBoundingBox // userSpaceOnUse
+
+    var image = new am4core.Image();
+    image.href = url;
+    image.width = 150;
+    image.height = 150;
+    image.x = 0;
+    image.y = 0;
+    image.verticalCenter = "middle";
+    image.valign = "middle";
+    pattern.addElement(image.element);
+    pattern.addElement(image.element);
+    pattern.addElement(image.element);
+    return pattern;
+  },
+  checkColor = function checkColor(key, obj) {
       if (colorFields.includes(key)) {
-        if (obj[key] === "transparent") {
+        if (obj[key].includes("|")) {
+          obj[key] = createGradient( obj[key] );
+        }
+        else if (obj[key].startsWith("http")) {
+          obj[key] = createPattern( obj[key] );
+        }
+        else if (obj[key] === "transparent") {
           obj[key] = am4core.color("#f00", 0);
         } else {
           obj[key] = am4core.color(obj[key]);
@@ -963,7 +1019,11 @@ iMapsModel.prepareColor = function (data) {
       Object.keys(Obj).map(function (key, index) {
         if (_typeof(Obj[key]) === "object") {
           iterateObj(Obj[key]);
-        } else {
+        } 
+        else if (typeof Obj['className'] !== 'undefined' ) {
+          return;
+        }
+        else {
           checkColor(key, Obj);
         }
       });
@@ -972,6 +1032,7 @@ iMapsModel.prepareColor = function (data) {
   iterateObj(data);
   return data;
 };
+
 /**
  * Retrives object with region codes and names from geojson
  */
@@ -1053,6 +1114,8 @@ iMapsManager.addMap = function (index) {
     bgImage,
     container = document.getElementById(data.container);
 
+    var aspRatioContainer = container.closest(".map_aspect_ratio");
+
   if (data.disabled) {
     return;
   }
@@ -1065,8 +1128,14 @@ iMapsManager.addMap = function (index) {
   if (typeof im.maps[id] !== 'undefined') {
     im.maps[id].map.dispose();
   }
+  
   // map container size adjustment
-  container.closest(".map_aspect_ratio").style.paddingTop = String(data.visual.paddingTop) + "%";
+  // if mobile
+  if (window.innerWidth <= 780 && typeof aspRatioContainer.dataset.paddingTopMobile !== 'undefined' && aspRatioContainer.dataset.paddingTopMobile !== '') {
+    aspRatioContainer.style.paddingTop = String(aspRatioContainer.dataset.paddingTopMobile);
+  } else {
+    aspRatioContainer.style.paddingTop = String(data.visual.paddingTop);
+  }
 
   if (data.visual.maxWidth !== "") {
     //container.closest(".map_box").style.maxWidth = String(data.visual.maxWidth) + "px";
@@ -2067,12 +2136,22 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
   regionTemplate.stroke = data.visual.borderColor;
   regionTemplate.strokeWidth = data.visual.borderWidth; // fill
 
-  regionTemplate.propertyFields.fill = "fill"; // exploring adapter
-
+  regionTemplate.propertyFields.fill = "fill"; 
+  
+  // exploring adapter
   /*
   	regionTemplate.adapter.add("fill", function(fill, target) {
-  		return chart.colors.getIndex(Math.round(Math.random() * 4)).saturate(0.3);
-  	});*/
+  		if(Array.isArray(fill)){
+        let gradient = new am4core.LinearGradient();
+        fill.forEach(function(color){
+          gradient.addColor(am4core.color(color));
+        });
+        fill = gradient;
+      }
+      return fill;
+  	});
+    */
+    
   // hover - only create if it's not a group hover series
 
   if (!groupHover) {
@@ -2081,12 +2160,12 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
     } else {
       hover = regionTemplate.states.create("hover");
       hover.propertyFields.fill = "hover";
-    } //hover.propertyFields.strokeWidth = "borderWidthHover";
+    } 
+    //hover.propertyFields.strokeWidth = "borderWidthHover";
     //hover.propertyFields.stroke = "borderColorHover";
-
-  } // active state
-
-
+  } 
+    
+  // active state
   if (data.regionActiveState && im.bool(data.regionActiveState.enabled)) {
     active = regionTemplate.states.create("active");
 
@@ -2848,11 +2927,16 @@ iMapsManager.setupTooltip = function (id, series, data, marker) {
     return series;
   }
 
+
+
   //if it's overlay, it might have a custom config
 
   // tooltip settings from map config
   series.tooltip.label.interactionsEnabled = im.bool(tooltip.fixed);
   series.tooltip.background.cornerRadius = tooltip.cornerRadius;
+  if( tooltip.pointerLength ){
+    series.tooltip.background.pointerLength = parseInt( tooltip.pointerLength );
+  }
   series.tooltip.getFillFromObject = false;
   series.tooltip.getStrokeFromObject = false;
   series.tooltip.label.fill = tooltip.color;
@@ -2953,7 +3037,6 @@ iMapsManager.setupTooltip = function (id, series, data, marker) {
       }
     }
   }
-
   return series;
 };
 
@@ -3182,9 +3265,18 @@ iMapsManager.setupHoverEvents = function (id, ev) {
     });
   }
 
+ 
   // we exclude touch devices, since the hover event is also triggered on tap, otherwise we have 2 select events triggered
   if (im.bool(dataContext.triggerClickOnHover) && (!iMapsManager.isTouchScreendevice() || ev.type === 'over') && (typeof iMaps.maps[id].mapClicked === 'undefined' || iMaps.maps[id].mapClicked === false)) {
     iMapsManager.select(id, dataContext.id, false, false, dataContext.mapID, false);
+  }
+
+  // if it's a marker and we want to trigger hover event also on associated regions in marker value
+  if(im.bool(dataContext.triggerRegionHover) && dataContext.val && dataContext.val !== '' ){
+    iMapsManager.hover(id, dataContext.val );
+    ev.target.events.on("out",function(ev){
+      iMapsManager.clearHovered(id);
+    });
   }
 };
 
@@ -4961,6 +5053,16 @@ iMaps.init = function (hold) {
   }
 
   if (hold) {
+    return;
+  }
+
+  if( typeof am4core === 'undefined' ){
+    console.log('Map files not loaded properly.');
+
+    let oxygen = document.querySelector('.oxygen-body .map_wrapper .map_render');
+    if(oxygen){
+      oxygen.innerHTML = 'Map Container. <br> Map will not render in Oxygen preview, but will render in live page.<br>Consider enabling the "Async Loading" option in the Settings > Performance page.';
+    }
     return;
   }
 
