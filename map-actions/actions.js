@@ -408,14 +408,14 @@ iMapsActions.contentBelow = function (id, data, scroll) {
 
 	// hide
 	what2hide = mapContentContainer.firstChild;
-	if (what2hide) {
+	if (typeof what2hide !== 'undefined') {
 		what2hide.style.display = 'none';
 		footerContent.appendChild(what2hide);
 	}
 
 	// display this
 	what2display = document.querySelector(data.content);
-	if (what2display) {
+	if (typeof what2hide !== 'undefined') {
 
 		mapContentContainer.appendChild(what2display);
 		what2display.style.display = 'block';
