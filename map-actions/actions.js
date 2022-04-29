@@ -1,7 +1,7 @@
 /**
  * Display content below the map
  */
-function igm_display_below(id, data) {
+ function igm_display_below(id, data) {
 	iMapsActions.contentBelow(id, data, false);
 	window.dispatchEvent(new Event('resize'));
 }
@@ -408,17 +408,22 @@ iMapsActions.contentBelow = function (id, data, scroll) {
 
 	// hide
 	what2hide = mapContentContainer.firstChild;
-	if (typeof what2hide !== 'undefined') {
-		what2hide.style.display = 'none';
+	if (what2hide) {
+		if( what2hide.style ){
+			what2hide.style.display = 'none';
+		}
 		footerContent.appendChild(what2hide);
 	}
 
 	// display this
 	what2display = document.querySelector(data.content);
-	if (typeof what2hide !== 'undefined') {
+	if (what2display) {
 
 		mapContentContainer.appendChild(what2display);
-		what2display.style.display = 'block';
+		if( what2display.style ){
+			what2display.style.display = 'block';
+		}
+		
 	}
 
 	if (scroll) {
