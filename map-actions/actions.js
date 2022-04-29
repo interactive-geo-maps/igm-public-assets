@@ -1062,10 +1062,18 @@ iMapsActions.wpFeSanitizeTitle = function (title) {
 
 iMapsActions.resetContainer = function (id, selector) {
 	var mapContainer = document.getElementById("map_wrapper_" + id);
-	var mapContentContainer = mapContainer.querySelector(selector);
 	var footerContent = document.getElementById("igm-hidden-footer-content");
+	var mapContentContainer, what2hide;
+
+	// if map container doesn't exist, return. we might be trying to reset a container with id of an overlay
+	if( mapContainer === null ) {
+		return;
+	}
+
+	mapContentContainer = mapContainer.querySelector(selector);
 
 	if (mapContentContainer !== null) {
+		
 		what2hide = mapContentContainer.firstChild;
 		if (what2hide && footerContent) {
 			what2hide.style.display = 'none';
