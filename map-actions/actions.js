@@ -130,6 +130,7 @@ iMapsActions.buildDropdown = function (el) {
 		noResultsText: noResults,
 		itemSelectText: select,
 		resetScrollPosition: false,
+		searchResultLimit: 3,
 	};
 
 	var choices = new Choices(el, opts);
@@ -295,6 +296,7 @@ iMapsActions.buildFilter = function (el) {
 };
 
 iMapsActions.lightbox = false;
+iMapsActions.lightboxIsRunning = false;
 iMapsActions.lightboxAction = function (id, data, type) {
 	var elements = [],
 		width = iMapsActionOptions.lightboxWidth,
@@ -369,19 +371,23 @@ iMapsActions.lightboxAction = function (id, data, type) {
 
 	if (!iMapsActions.lighbox) {
 		iMapsActions.lightbox = GLightbox(opts);
+
 	}
 
-	if( data.content !== '' ){
+	if( data.content !== '' && iMapsActions.lightbox && ! iMapsActions.lightboxIsRunning ){
 		iMapsActions.lightbox.open();
+		iMapsActions.lightboxIsRunning = true;
 	} else {
-		console.log('Empty Action Content - Lightbox not triggered');
+		console.log('Empty Action Content or Incorrect Request - Lightbox not triggered');
 	}
 	
 	iMapsActions.lightbox.on('close', function(){
 		iMapsManager.clearSelected(id);
+		iMapsActions.lightboxIsRunning = false;
 	});
 
 };
+
 iMapsActions.contentBelow = function (id, data, scroll) {
 	// go 2 steps up to find map wrapper.
 	var originalTop,

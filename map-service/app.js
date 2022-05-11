@@ -447,10 +447,9 @@ iMapsModel.prepareImageFields = function (data) {
   // image markers
   if (Array.isArray(data.imageMarkers) && Array.isArray( data.imageMarkers )) {
     data.imageMarkers.map(function (marker) {
-      if (marker.image && ( Array.isArray( marker.image ) || typeof marker.image === 'object' )) {
+      if (typeof marker.href === 'undefined' && marker.image && ( Array.isArray( marker.image ) || typeof marker.image === 'object' )) {
         marker.href = marker.image.url;
       }
-
       return marker;
     });
   }
@@ -1132,9 +1131,9 @@ iMapsManager.addMap = function (index) {
   // map container size adjustment
   // if mobile
   if (window.innerWidth <= 780 && typeof aspRatioContainer.dataset.paddingTopMobile !== 'undefined' && aspRatioContainer.dataset.paddingTopMobile !== '') {
-    aspRatioContainer.style.paddingTop = String(aspRatioContainer.dataset.paddingTopMobile);
+    aspRatioContainer.style.paddingTop = String(aspRatioContainer.dataset.paddingTopMobile) + '%';
   } else {
-    aspRatioContainer.style.paddingTop = String(data.visual.paddingTop);
+    aspRatioContainer.style.paddingTop = String(data.visual.paddingTop) + '%';
   }
 
   if (data.visual.maxWidth !== "") {
@@ -2220,7 +2219,17 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
 
     var labelSeries = map.series.push(new am4maps.MapImageSeries());
     var labelTemplate = labelSeries.mapImages.template.createChild(am4core.Label);
-    
+   
+    // Label Background - currently only possible with global
+    var background = typeof igmLabelsBackground !== 'undefined' ? igmLabelsBackground : false;
+    if ( typeof background === 'object' ) {
+      labelTemplate.background = new am4core.RoundedRectangle();
+      labelTemplate.background.cornerRadius(...background.cornerRadius);
+      labelTemplate.background.fill = am4core.color( background.color );
+      labelTemplate.padding(...background.padding);
+      labelTemplate.background.stroke = am4core.color( background.stroke );
+    }  
+
     im.maps[id].labelSeries.push(labelSeries);
     
     labelTemplate.horizontalCenter = data.regionLabels.horizontalCenter;
@@ -2816,17 +2825,19 @@ iMapsManager.pushLabelSeries = function (id, data) {
     label,
     activeState,
     highlightState,
-    hoverState;
+    hoverState,
+    background = false;
 
   if (Array.isArray(data.labels) && data.labels.length) {
     // Create image series
     labelSeries = map.series.push(new am4maps.MapImageSeries());
     labelSeries.name = data.roundMarkersLegend && data.roundMarkersLegend.title !== "" ? data.roundMarkersLegend.title : data.title;
-    labelSeries.hiddenInLegend = data.roundMarkersLegend ? !im.bool(data.roundMarkersLegend.enabled) : false; // Create a circle image in image series template so it gets replicated to all new images
-
+    labelSeries.hiddenInLegend = data.roundMarkersLegend ? !im.bool(data.roundMarkersLegend.enabled) : false; 
+    
     labelSeriesTemplate = labelSeries.mapImages.template;
-    labelSeriesTemplate.setStateOnChildren = true; // label
+    labelSeriesTemplate.setStateOnChildren = true; 
 
+    // label
     label = labelSeriesTemplate.createChild(am4core.Label);
     label.text = "{id}";
     label.nonScaling = true;
@@ -2835,6 +2846,7 @@ iMapsManager.pushLabelSeries = function (id, data) {
       label.fontFamily = data.labelStyle.fontFamily;
       label.fontWeight = data.labelStyle.fontWeight;
     }
+
 
     label.horizontalCenter = data.labelPosition.horizontalCenter;
     label.verticalCenter = data.labelPosition.verticalCenter;
@@ -2848,16 +2860,28 @@ iMapsManager.pushLabelSeries = function (id, data) {
     } else {
       label.tooltipText = data.tooltip && data.tooltip.template ? data.tooltip.template : "{tooltipContent}";
       label.tooltipHTML = data.tooltip && data.tooltip.template ? data.tooltip.template : "{tooltipContent}";
-    } // Set property fields
-
-
+    } 
+    
+    // Set property fields
     labelSeriesTemplate.propertyFields.latitude = "latitude";
     labelSeriesTemplate.propertyFields.longitude = "longitude";
     labelSeriesTemplate.propertyFields.fill = "fill";
     labelSeriesTemplate.propertyFields.fontSize = "fontSize";
     label.propertyFields.verticalCenter = "verticalCenter";
-    label.propertyFields.horizontalCenter = "horizontalCenter"; // hover & active
+    label.propertyFields.horizontalCenter = "horizontalCenter"; 
+    
 
+    // labels background - currently only possible through global
+    background = typeof igmLabelsBackground !== 'undefined' ? igmLabelsBackground : false;
+    if ( typeof background === 'object' ) {
+      label.background = new am4core.RoundedRectangle();
+      label.background.cornerRadius(...background.cornerRadius);
+      label.background.fill = am4core.color( background.color );
+      label.padding(...background.padding);
+      label.background.stroke = am4core.color( background.stroke );
+    }    
+
+    // hover & active
     hoverState = label.states.create("hover");
     hoverState.properties.fill = data.hover;
     hoverState.propertyFields.fill = "hover"; // active
@@ -3268,7 +3292,7 @@ iMapsManager.setupHoverEvents = function (id, ev) {
  
   // we exclude touch devices, since the hover event is also triggered on tap, otherwise we have 2 select events triggered
   if (im.bool(dataContext.triggerClickOnHover) && (!iMapsManager.isTouchScreendevice() || ev.type === 'over') && (typeof iMaps.maps[id].mapClicked === 'undefined' || iMaps.maps[id].mapClicked === false)) {
-    iMapsManager.select(id, dataContext.id, false, false, dataContext.mapID, false);
+    iMapsManager.select(id, dataContext.id, false, true, dataContext.mapID, false);
   }
 
   // if it's a marker and we want to trigger hover event also on associated regions in marker value
@@ -3520,7 +3544,8 @@ iMapsManager.select = function (id, elID, forceFixedTooltip, showTooltip, series
   }
 
   // we pass the click as the 'skipReset' - if not a real click, its the hover and we skip the reset to prevent flickering
-  iMapsManager.clearSelected(id, false, ! click);
+  // second argument, the keepThis set to true, to avoid removing hover status of selected/hovered entry
+  iMapsManager.clearSelected(id, true, ! click);
 
   if (click) {
     iMaps.maps[id].activeStateControl = true;
@@ -4242,7 +4267,7 @@ iMapsManager.clearSelected = function (id, keepThis, skipReset) {
   if (!keepThis && typeof iMapsActions !== 'undefined') {
 
     if( ! skipReset ){
-      iMapsActions.resetActions(id);
+      //iMapsActions.resetActions(id);
     }
     map.selected = [];
   } else {
@@ -4708,7 +4733,7 @@ iMapsManager.handleInfoBox = function (id) {
   var im = this,
     map = im.maps[id].map,
     events = ["ready", "mappositionchanged", "zoomlevelchanged"],
-    container = document.getElementById("map_tech_info"),
+    container = document.getElementById("map_visual_info"),
     coordinatesc = document.getElementById("map_click_events_coordinates"),
     series = im.maps[id].series;
 
@@ -4723,6 +4748,7 @@ iMapsManager.handleInfoBox = function (id) {
   }
 
   if (coordinatesc) {
+    
     map.events.on("hit", function (ev) {
       var coordinates = map.svgPointToGeo(ev.svgPoint);
       var lat = Number(coordinates.latitude).toFixed(6);
@@ -4750,6 +4776,7 @@ iMapsManager.handleInfoBox = function (id) {
       coordinatesc.innerHTML = '';
       coordinatesc.appendChild(latEl);
       coordinatesc.appendChild(longEl);
+      coordinatesc.parentElement.style.display = 'block';
       var event = new CustomEvent("mapPointClicked", {
         detail: {
           latitude: lat,
@@ -4765,13 +4792,21 @@ iMapsManager.populateInfo = function (id, container) {
   var im = this,
     map = im.maps[id].map,
     info = "";
-  info += "Zoom Level: " + parseFloat(Number(map.zoomLevel).toFixed(2)) + "<br>";
-  info += "Center Coordinates: <br>" + "LAT " + Number(map.zoomGeoPoint.latitude).toFixed(6) + "<br>" + "LONG " + Number(map.zoomGeoPoint.longitude).toFixed(6) + "<br>";
-  container.innerHTML = info;
+    info += "Zoom Level: " + parseFloat(Number(map.zoomLevel).toFixed(2)) + "<br>";
+    info += "Center Coordinates: <br>" + "LAT " + Number(map.zoomGeoPoint.latitude).toFixed(6) + "<br>" + "LONG " + Number(map.zoomGeoPoint.longitude).toFixed(6) + "<br>";
+    container.innerHTML = info;
+
+    let centerData = {
+      "zoom" : parseFloat(Number(map.zoomLevel).toFixed(2)),
+      "lat"  : Number(map.zoomGeoPoint.latitude).toFixed(6),
+      "long" : Number(map.zoomGeoPoint.longitude).toFixed(6)
+    };
+
+    container.setAttribute('data-visual',JSON.stringify(centerData));
 };
 
 iMapsManager.populateClickInfo = function (data) {
-  var container = document.getElementById("map_click_events_info"),
+    var container = document.getElementById("map_click_events_info"),
     info = "";
 
   if (container && data) {
@@ -4779,6 +4814,10 @@ iMapsManager.populateClickInfo = function (data) {
 
     if (data.name) {
       info += "Name: " + data.name + "<br>";
+    }
+
+    if (data.madeFromGeoData) {
+      info += ""; // button to add region would go here
     }
 
     if (data.latitude) {
@@ -4789,7 +4828,7 @@ iMapsManager.populateClickInfo = function (data) {
     if (data.action) {
       info += "Action: " + data.action.replace("igm_", "") + "<br>";
     }
-
+    container.parentElement.style.display = 'block'
     container.innerHTML = info;
   }
 };
