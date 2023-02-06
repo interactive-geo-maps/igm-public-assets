@@ -76,28 +76,32 @@ geocluster.prototype._cluster = function (elements, bias, defaults, tooltipTempl
     diff = self._dist(elements[i].latitude, elements[i].longitude, elements[i - 1].latitude, elements[i - 1].longitude);
     tot_diff += diff;
     diffs.push(diff);
-  } // calculate mean diff
-
-
+  } 
+  
+  // calculate mean diff
   var mean_diff = tot_diff / diffs.length;
-  var diff_variance = 0; // calculate variance total
-
+  var diff_variance = 0; 
+  
+  // calculate variance total
   diffs.forEach(function (diff) {
     diff_variance += Math.pow(diff - mean_diff, 2);
-  }); // derive threshold from stdev and bias - modified to allow bias to be more decisive
-
+  }); 
+  
+  // derive threshold from stdev and bias - modified to allow bias to be more decisive
   var diff_stdev = Math.sqrt(diff_variance / diffs.length);
   var threshold = 10000 * bias;
-  var cluster_map = []; // generate random initial cluster map
-
+  var cluster_map = []; 
+  
+  // generate random initial cluster map
   cluster_map.push({
-    centroid: elements[Math.floor(Math.random() * elements.length)],
+    centroid: elements[Math.floor(0.5 * elements.length)],
     elements: [],
     fill: defaults.fill,
     hover: defaults.hover,
     radius: defaults.radius
-  }); // loop elements and distribute them to clusters
-
+  }); 
+  
+  // loop elements and distribute them to clusters
   var changing = true;
 
   while (changing === true) {
@@ -198,7 +202,7 @@ iMapsRouter.getGeoFiles = function (regionClicked) {
     urlappend,
     varappend,
     geoFiles = {},
-    continents = ["southAmerica", "northAmerica", "europe", "asia", "oceania", "africa", "antarctica"]; // continents
+    continents = ["southAmerica", "northAmerica", "europe", "middleEast", "asia", "oceania", "africa", "antarctica"]; // continents
 
   if (continents.includes(regionID)) {
     urlappend = "region/world/";
@@ -273,7 +277,7 @@ iMapsRouter.getCleanMapName = function (mapName, id) {
 
 iMapsRouter.iso2cleanName = function (iso, mapID) {
   var countries = iMapsRouter.getCountries();
-  var continents = ['africa', 'antarctiva', 'asia', 'europe', 'northAmerica', 'oceania', 'southAmerica'];
+  var continents = ['africa', 'antarctiva', 'asia', 'europe','middleEast', 'northAmerica', 'oceania', 'southAmerica', 'centralAmerica'];
   var tempIso;
   var series = iMapsManager.maps[mapID].seriesIndex;
   var match = false;
@@ -290,7 +294,7 @@ iMapsRouter.iso2cleanName = function (iso, mapID) {
   } else if (continents.includes(iso)) {
     return "region/world/" + iso;
   } else if (iso.includes("US-")) {
-    tempIso = ["region/usa/" + iso.replace("US-", "").toLowerCase(), "region/usa/congressional/" + iso.replace("US-", "").toLowerCase()];
+    tempIso = ["region/usa/" + iso.replace("US-", "").toLowerCase(), "region/usa/congressional/" + iso.replace("US-", "").toLowerCase(), "region/usa/congressional2022/" + iso.replace("US-", "").toLowerCase()];
   } else if ("GB" === iso) {
     tempIso = ['uk', 'ukCountries', 'ukCounties'];
   } else if ("BA" === iso) {
@@ -315,25 +319,32 @@ iMapsRouter.iso2cleanName = function (iso, mapID) {
     tempIso = ['congoDR'];
   } else if ("CG" === iso) {
     tempIso = ['congo'];
+  } else if ("CZ" === iso) {
+    tempIso = ['czechRepublic','czechia'];
+  } else if ("MM" === iso) {
+    tempIso = ['myanmar'];
   } // the rest
 
-
+  // this block needs reviewing.. if/else are a mess
   if (Array.isArray(tempIso)) {
     tempIso.forEach(function (item, index) {
       if (series.hasOwnProperty(item)) {
         match = item;
-      }
+      } 
     });
 
     if (match) {
       return match;
+    } else {
+        if (countries.hasOwnProperty(iso)) {
+            return iMapsRouter.camelize(countries[iso]);
+          }
     }
   } else {
     if (countries.hasOwnProperty(iso)) {
       return iMapsRouter.camelize(countries[iso]);
     }
   }
-
   return false;
 };
 
@@ -370,7 +381,7 @@ iMapsModel.prepareData = function (fullData) {
     if (Array.isArray(fullData[index].overlay) && fullData[index].overlay.length > 0) {
       fullData[index].overlay.forEach(function (odata, ind) {
         // if the overlay map is the same as base map, only include the active regions
-        if (fullData[index].overlay[ind].map === fullData[index].map) {
+        if (fullData[index].overlay[ind].map === fullData[index].map && ! iMapsManager.bool( fullData[index].allowEmpty ) )  {
           fullData[index].overlay[ind].include = iMapsModel.prepareOverlayInclude(odata);
         }
 
@@ -423,9 +434,13 @@ iMapsModel.iterateData = function (data) {
   return data;
 };
 
+
 iMapsModel.prepareMultiGeoLine = function (data) {
   if (Array.isArray(data.lines) && data.lines.length) {
     data.lines.map(function (line) {
+      // notice the arrow option needs to be reversed, because it controls the arrow.disabled option when rendered
+      line.arrow = typeof line.arrow !== 'undefined' ? iMapsManager.bool( line.arrow ) : false;
+      line.arrowDisabled = ! line.arrow;
       line.multiGeoLine.map(function (geoLine) {
         Object.assign(geoLine, geoLine.coordinates);
         delete geoLine.coordinates;
@@ -438,12 +453,11 @@ iMapsModel.prepareMultiGeoLine = function (data) {
 
 iMapsModel.prepareImageFields = function (data) {
   // image markers
-  if (Array.isArray(data.imageMarkers) && data.imageMarkers.length) {
+  if (Array.isArray(data.imageMarkers) && Array.isArray( data.imageMarkers )) {
     data.imageMarkers.map(function (marker) {
-      if (marker.image) {
+      if (typeof marker.href === 'undefined' && marker.image && ( Array.isArray( marker.image ) || typeof marker.image === 'object' )) {
         marker.href = marker.image.url;
       }
-
       return marker;
     });
   }
@@ -455,6 +469,18 @@ iMapsModel.prepareGroupedRegions = function (data) {
   var regions, tempRegion, group; // regions
 
   if (Array.isArray(data.regions) && data.regions.length) {
+
+    if (typeof data.regionGroups === 'undefined') {
+      data.regionGroups = [];
+    }
+
+    // if the option to group entries is enabled, cosider them as a group entry
+  if(iMapsManager.bool ( data.regionsGroupHover ) ) {
+    data.regionGroups.push(data.regions);
+    return data;
+  }
+
+
     data.regions.map(function (region, index) {
       if (region.id && String(region.id).includes(",")) {
         group = [];
@@ -472,11 +498,7 @@ iMapsModel.prepareGroupedRegions = function (data) {
           group.push(tempRegion);
         });
 
-        // add group to main data object, but check if it's defined
-        if (typeof data.regionGroups === 'undefined') {
-          data.regionGroups = [];
-        }
-
+        // add group to main data object
         // finally add it to the main data object
         data.regionGroups.push(group);
 
@@ -648,6 +670,13 @@ iMapsModel.prepareEntriesData = function (data) {
       } // set name to be id
 
 
+      if( typeof marker.latitude === 'string' ){
+        marker.latitude = parseFloat(marker.latitude);
+      }
+      if( typeof marker.longitude === 'string' ){
+        marker.longitude = parseFloat(marker.latitude);
+      }
+
       if (typeof marker.name === 'undefined') {
         marker.name = marker.id;
       }
@@ -692,6 +721,10 @@ iMapsModel.prepareEntriesData = function (data) {
 
       if (typeof data.markerDefaults.triggerClickOnHover !== 'undefined' && data.markerDefaults.triggerClickOnHover === '1') {
         marker.triggerClickOnHover = true;
+      }
+
+      if (typeof data.triggerRegionHover !== 'undefined' && data.triggerRegionHover.enabled === '1') {
+        marker.triggerRegionHover = true;
       }
 
       marker.tooltipContent = iMapsModel.prepareTooltip(marker.tooltipContent, data.tooltip);
@@ -761,7 +794,7 @@ iMapsModel.prepareEntriesData = function (data) {
     data.imageMarkers.map(function (marker) {
       if (typeof marker.useDefaults === "undefined" || marker.useDefaults === "1") {
         Object.assign(marker, data.imageMarkerDefaults);
-      }
+      } 
 
       if (marker.coordinates) {
         marker.latitude = marker.coordinates.latitude;
@@ -773,11 +806,23 @@ iMapsModel.prepareEntriesData = function (data) {
         marker.nonScaling = iMapsManager.bool(marker.nonScaling);
       }
 
+      if (typeof marker.size === 'undefined') {
+        marker.size = data.imageMarkerDefaults.size;
+      }
+
+      if (typeof marker.horizontalCenter === 'undefined') {
+        marker.horizontalCenter = data.imageMarkerDefaults.horizontalCenter;
+      }
+
+      if (typeof marker.verticalCenter === 'undefined') {
+        marker.verticalCenter = data.imageMarkerDefaults.verticalCenter;
+      }
+
       if (typeof marker.name === 'undefined') {
         marker.name = marker.id;
       }
 
-      if (marker.action === "default") {
+      if (marker.action === "default" || typeof marker.action === 'undefined') {
         marker.action = data.imageMarkerDefaults.action;
       }
 
@@ -914,7 +959,11 @@ iMapsModel.coordinatesToInt = function (data) {
         if (_typeof(Obj[key]) === "object") {
           if (key === "coordinates" || key === "homeGeoPoint") {
             convertCoordinates(key, Obj);
-          } else {
+          } 
+          else if (typeof Obj['className'] !== 'undefined' ) {
+            return;
+          }
+          else {
             iterateObj(Obj[key]);
           }
         }
@@ -925,12 +974,59 @@ iMapsModel.coordinatesToInt = function (data) {
   return data;
 };
 
+
 iMapsModel.prepareColor = function (data) {
   // prepare color fields
   var colorFields = ["inactiveColor", "activeColor", "hoverColor", "hover", "inactiveHoverColor", "backgroundColor", "color", "minColor", "maxColor", "fill", "projectionBackgroundColor", "borderColor", "borderColorHover"],
-    checkColor = function checkColor(key, obj) {
+  createGradient = function createGradient( data ){
+    var colours = data.split("|");
+    var gradient, gradientType, gradientOffset, colourIndex;
+    
+    gradientType   = typeof igmGradientType !== 'undefined' ? igmGradientType : 'LinearGradient';
+    
+    gradientOffset = typeof igmGradientOffset !== 'undefined' && Array.isArray(igmGradientOffset) ? igmGradientOffset : null;
+
+    gradient = new am4core[gradientType]();
+    colours.forEach(function(color, index){
+          gradient.addColor(am4core.color(color), 1, gradientOffset[index]);
+    });
+
+    //rotation
+    gradient.rotation = typeof igmGradientRotation !== 'undefined' ? igmGradientRotation : 0;
+    return gradient;
+  },
+  createPattern = function createPattern( data ) {
+    var url = data;
+    // Create pattern
+    var pattern = new am4core.Pattern();
+    pattern.width = 150;
+    pattern.height = 150;
+    pattern.strokeWidth = 0;
+    pattern.stroke = am4core.color('#6699cc');
+    //pattern.patternUnits = 'objectBoundingBox'; // objectBoundingBox // userSpaceOnUse
+
+    var image = new am4core.Image();
+    image.href = url;
+    image.width = 150;
+    image.height = 150;
+    image.x = 0;
+    image.y = 0;
+    image.verticalCenter = "middle";
+    image.valign = "middle";
+    pattern.addElement(image.element);
+    pattern.addElement(image.element);
+    pattern.addElement(image.element);
+    return pattern;
+  },
+  checkColor = function checkColor(key, obj) {
       if (colorFields.includes(key)) {
-        if (obj[key] === "transparent") {
+        if (obj[key].includes("|")) {
+          obj[key] = createGradient( obj[key] );
+        }
+        else if (obj[key].startsWith("http")) {
+          obj[key] = createPattern( obj[key] );
+        }
+        else if (obj[key] === "transparent") {
           obj[key] = am4core.color("#f00", 0);
         } else {
           obj[key] = am4core.color(obj[key]);
@@ -945,7 +1041,11 @@ iMapsModel.prepareColor = function (data) {
       Object.keys(Obj).map(function (key, index) {
         if (_typeof(Obj[key]) === "object") {
           iterateObj(Obj[key]);
-        } else {
+        } 
+        else if (typeof Obj['className'] !== 'undefined' ) {
+          return;
+        }
+        else {
           checkColor(key, Obj);
         }
       });
@@ -954,6 +1054,7 @@ iMapsModel.prepareColor = function (data) {
   iterateObj(data);
   return data;
 };
+
 /**
  * Retrives object with region codes and names from geojson
  */
@@ -1033,6 +1134,7 @@ iMapsManager.addMap = function (index) {
     mapVar,
     bgSeries,
     bgImage,
+    aspRatioContainer,
     container = document.getElementById(data.container);
 
   if (data.disabled) {
@@ -1043,12 +1145,30 @@ iMapsManager.addMap = function (index) {
     return;
   }
 
+  aspRatioContainer = container.closest(".map_aspect_ratio");
+
+
   // if map was already built
   if (typeof im.maps[id] !== 'undefined') {
     im.maps[id].map.dispose();
   }
+  
   // map container size adjustment
-  container.closest(".map_aspect_ratio").style.paddingTop = String(data.visual.paddingTop) + "%";
+  // if mobile
+  if (window.innerWidth <= 780 && typeof data.visual.paddingTop !== 'undefined' && data.visual.paddingTop !== '') {
+    aspRatioContainer.style.paddingTop = String(data.visual.paddingTopMobile) + '%';
+  } else {
+    aspRatioContainer.style.paddingTop = String(data.visual.paddingTop) + '%';
+  }
+
+  window.addEventListener('resize', function(){
+    if (window.innerWidth <= 780 && typeof data.visual.paddingTop !== 'undefined' && data.visual.paddingTop !== '') {
+      aspRatioContainer.style.paddingTop = String(data.visual.paddingTopMobile) + '%';
+    } else {
+      aspRatioContainer.style.paddingTop = String(data.visual.paddingTop) + '%';
+    }
+  });
+
 
   if (data.visual.maxWidth !== "") {
     //container.closest(".map_box").style.maxWidth = String(data.visual.maxWidth) + "px";
@@ -1069,7 +1189,8 @@ iMapsManager.addMap = function (index) {
     allBaseSeries: [],
     labelSeries:[],
     baseRegionSeries: {},
-    groupedBaseRegionSeries: []
+    groupedBaseRegionSeries: [],
+    backgroundSeries: {}
   };
   map = im.maps[id].map;
   map.readerTitle = "Interactive Map";
@@ -1106,6 +1227,10 @@ iMapsManager.addMap = function (index) {
   } else {
     mapVar = iMapsRouter.getVarByName(data.map);
     map.geodata = window[mapVar];
+  }
+
+  if (typeof iMapsData.options !== "undefined" && typeof iMapsData.options.lang !== "undefined" && iMapsData.options.lang && typeof window['am4geodata_lang_' + iMapsData.options.lang] !== "undefined") {
+    map.geodataNames = window['am4geodata_lang_' + iMapsData.options.lang];
   }
 
   // projection - moved to the end of the function to fix issue with Albers not rendering correctly
@@ -1171,6 +1296,8 @@ iMapsManager.addMap = function (index) {
     bgSeries.data = [{
       src: data.visual.bgImage.url
     }];
+
+    im.maps[id].backgroundSeries = bgSeries;
   }
 
   map.exporting.backgroundColor = data.visual.backgroundColor;
@@ -1202,7 +1329,7 @@ iMapsManager.addMap = function (index) {
       map.legend.position = data.legend.position;
       map.legend.align = data.legend.position;
       map.legend.valign = data.legend.valign;
-    } // image legend
+    } 
 
 
     if (typeof data.legend.style !== 'undefined' && data.legend.style !== 'default') {
@@ -1494,9 +1621,11 @@ iMapsManager.handleZoom = function (id) {
     map.seriesContainer.draggable = data.zoom ? im.bool(data.zoom.draggable) : false;
     map.seriesContainer.resizable = data.zoom ? im.bool(data.zoom.draggable) : false; // don't zoom out to center
 
+    // control zoom and pan behaviour
     map.centerMapOnZoomOut = false;
-    map.maxPanOut = 0; // zoom is enabled, only allowdrag on mobile
+    map.maxPanOut = 0; 
 
+    // zoom is enabled, only allowdrag on mobile
     if (im.bool(data.zoom.enabled) && !im.bool(data.zoom.draggable) && im.bool(data.zoom.mobileResizable) && /Mobi|Android/i.test(navigator.userAgent)) {
       map.seriesContainer.draggable = true;
       map.seriesContainer.resizable = true;
@@ -1552,21 +1681,8 @@ iMapsManager.handleZoom = function (id) {
         homeButton.events.on("hit", function () {
           map.goHome();
           // in case drillDown is enabled, we hide everything else
-          if (im.bool(data.drillDownOnClick)) {
-            for (var i = 0, len = allCurrentSeries.length; i < len; i++) {
-              allCurrentSeries[i].hide(); //map.deltaLongitude = 0;
-            }
-
-            for (var ib = 0, lenb = allBaseSeries.length; ib < lenb; ib++) {
-              // this is messing the cluster markers on base map
-              allBaseSeries[ib].show();
-            }
-
-            iMapsManager.maps[id].drilledTo = false;
-            iMapsManager.maps[id].isDrilling = false;
-          } // reset actions
-
-
+          iMapsManager.resetDrilldown(id); 
+          // reset actions
           if (typeof iMapsActions !== 'undefined' && typeof iMapsActions.resetActions !== 'undefined') {
             iMapsActions.resetActions(id);
           }
@@ -1598,23 +1714,15 @@ iMapsManager.handleZoom = function (id) {
     var fullScreenButton = map.chartContainer.createChild(am4core.Button);
     fullScreenButton.events.on("hit", function (ev) {
       var parentMap = document.querySelector('#map_' + ev.target.icon.mapID);
-      var mainParent = parentMap.closest('.map_wrapper'); //ev.target.icon.path = iMapsManager.library.icons.exitFullIconPath;
-      //ev.target.icon.isFullScreen = true;
+      var mainParent = parentMap.closest('.map_wrapper'); 
+      
       // browser fullscreen
-
-      iMapsManager.openFullscreen(mainParent); // set a master option to be used by esc keypress to identify current div in fullscreen
-
+      iMapsManager.toggleFullscreen(mainParent); 
       iMapsManager.isFullScreen = ev.target;
-      /* else {
-      	ev.target.icon.path = iMapsManager.library.icons.goFullIconPath;
-      	ev.target.icon.isFullScreen = false;
-      	iMapsManager.closeFullScreen(elem);
-      	mainParent.classList.toggle('map_fullscreen');
-      	// set a master option to be used by esc keypress
-      	iMapsManager.isFullScreen = false;
-      } */
-    }); // Add button
-
+      
+    }); 
+    
+    // Add button
     fullScreenButton.align = data.fullScreen.align;
     fullScreenButton.valign = data.fullScreen.valign;
     fullScreenButton.margin(5, 5, 5, 5);
@@ -1630,6 +1738,13 @@ iMapsManager.handleZoom = function (id) {
     } else {
       fullScreenButton.id = '_fullscreen_button';
     }
+
+    /* 
+     * Solution for Firefox issue is here @pedro :)
+    map.events.on("inited", function () {
+        fullScreenButton.deepInvalidate();
+    });
+    */
   }
 
   // pan events?
@@ -1639,6 +1754,7 @@ iMapsManager.handleZoom = function (id) {
 
   // zoom level changed events
   map.events.on("zoomlevelchanged", function (ev) {
+
     var clusterSeries = im.maps[id].clusterSeries,
       closest,
       zlevel = ev.target.zoomLevel,
@@ -1647,38 +1763,49 @@ iMapsManager.handleZoom = function (id) {
       drilledTo = im.maps[id].drilledTo,
       activeMap = im.filteredMap;
 
+
     // where the magic happens to show/hide series from cluster markers
     if (clusterSeries && Object.keys(clusterSeries).length) {
       Object.keys(clusterSeries).forEach(function (key) {
 
-
         // if we are drilling and this cluster belongs to the map being drilled to
-        if ((isDrill && clusterSeries[key].overlay) || activeMap) {
+        // or if the map is active
+        if ( ( isDrill && clusterSeries[key].overlay ) || activeMap ) {
 
-          if ((isDrilling && drilledTo && parseInt(drilledTo) === parseInt(clusterSeries[key].overlay)) || activeMap === parseInt(clusterSeries[key].overlay)) {
+          // check if it's drilling and the destination is the overlay that the cluster belongs to
+          // check if we are filtering and the overlay is the one the cluster belongs to 
+          // !!!! we need to check for overlays from other maps that visible initially
+          if ( ( isDrilling && drilledTo && parseInt(drilledTo) === parseInt(clusterSeries[key].overlay) ) 
+                || parseInt( activeMap ) === parseInt(clusterSeries[key].overlay)
+                || ! isDrill && ! im.bool(data.liveFilter.enabled) ) {
+            
             // first we get the closest zoom value compared to the current zom
             closest = im.getClosest(clusterSeries[key].zoomLevels, zlevel);
             Object.keys(clusterSeries[key].zoomLevels).forEach(function (zkey) {
-              clusterSeries[key].zoomLevels[zkey].hide();
-
-              if (parseFloat(zkey) === closest) {
-                clusterSeries[key].zoomLevels[zkey].show();
-              } else {
                 clusterSeries[key].zoomLevels[zkey].hide();
-              }
+                if (parseFloat(zkey) === closest) {
+                    clusterSeries[key].zoomLevels[zkey].show();
+                } else {
+                    clusterSeries[key].zoomLevels[zkey].hide();
+
+                }
             });
           } else {
+            // not drilling and not active map
             Object.keys(clusterSeries[key].zoomLevels).forEach(function (zkey) {
-              clusterSeries[key].zoomLevels[zkey].hide();
+                clusterSeries[key].zoomLevels[zkey].hide();
             });
           }
 
           return;
         }
 
+        // it's not a drilldown, proceed
         // we go through the series to show the closest one and hide the others
         closest = im.getClosest(clusterSeries[key].zoomLevels, zlevel);
         Object.keys(clusterSeries[key].zoomLevels).forEach(function (zkey) {
+          
+            // we hide them by default
           clusterSeries[key].zoomLevels[zkey].hide();
 
           if (parseFloat(zkey) === closest) {
@@ -1706,12 +1833,41 @@ iMapsManager.getClosest = function (zoomLevels, zlevel) {
   });
   return closest;
 };
+
+
+/* Reset drilldown behaviour */
+iMapsManager.resetDrilldown = function (id) {
+
+    var im = this,
+    data = im.maps[id].data,
+    allCurrentSeries = im.maps[id].series,
+    allBaseSeries = im.maps[id].allBaseSeries,
+    bgSeries = im.maps[id].backgroundSeries;
+
+    if (im.bool(data.drillDownOnClick)) {
+        for (var i = 0, len = allCurrentSeries.length; i < len; i++) {
+          allCurrentSeries[i].hide(); //map.deltaLongitude = 0;
+        }
+
+        for (var ib = 0, lenb = allBaseSeries.length; ib < lenb; ib++) {
+          // this is messing the cluster markers on base map
+          allBaseSeries[ib].show();
+          bgSeries.show();
+        }
+
+        iMapsManager.maps[id].drilledTo = false;
+        iMapsManager.maps[id].isDrilling = false;
+      }
+}
+
 /** Manually fix lat/long offset for some countries in default projections/values */
 
 
 iMapsManager.latlongOffsetFix = function (data, mapObj, defaultZoom) {
   var mapSelected = data.map;
-  var mapsFixInclude = ['russiaLow', 'russiaHigh', 'russiaCrimeaLow', 'russiaCrimeaHigh', 'region/world/asiaLow', 'region/world/asiaHigh', 'region/world/asiaUltra', 'region/world/asiaIndiaLow', 'region/world/asiaIndiaHigh', 'region/world/asiaIndiaUltra']; // only do the fix if Russia is included
+  var mapsFixInclude = ['russiaLow', 'russiaHigh', 'russiaCrimeaLow', 'russiaCrimeaHigh', 'region/world/asiaLow', 'region/world/asiaHigh', 'region/world/asiaUltra', 'region/world/asiaIndiaLow', 'region/world/asiaIndiaHigh', 'region/world/asiaIndiaUltra']; 
+  
+  // only do the fix if Russia is included
 
   if (mapsFixInclude.includes(mapSelected) && data.exclude && !data.exclude.includes('RU')) {
     mapObj.deltaLongitude = -100;
@@ -1782,10 +1938,12 @@ iMapsManager.pushSeries = function (id, data) {
     return;
   }
 
-  seriesById[data.id] = []; // check if it's set a map overlay by default
-
+  seriesById[data.id] = []; 
+  
+  // check if it's set a map overlay by default
   if (typeof parentData.liveFilter !== 'undefined' && parentData.liveFilter["default"] !== parentData.id) {
     defaultSeries = parentData.liveFilter["default"];
+    im.filteredMap = defaultSeries;
   } // setup series index
 
 
@@ -1805,8 +1963,8 @@ iMapsManager.pushSeries = function (id, data) {
   // reference: https://interactivegeomaps.com/feature/live-filter/
   // but other overlays and empty maps might need to be added...
 
-
-  if (data.regions.length) {
+  // we don't check if the regions.lenght exist, because maybe user wants to add an empty map, only to show divisions
+  if (data.regions.length || im.bool(parentData.allowEmpty)) {
     // in case we don't allow empty, we only include the active regions
     if (!im.bool(parentData.allowEmpty)){
         data.include = [];
@@ -1825,15 +1983,15 @@ iMapsManager.pushSeries = function (id, data) {
     if (isDrill) {
       regionSeries.hidden = true;
       regionSeries.mapID = data.id;
-    } // hide in case we have a live filter and this is not the default
-
-
+    } 
+    
+    // hide in case we have a live filter and this is not the default
     if (parentData.liveFilter && im.bool(parentData.liveFilter.enabled) && defaultSeries && defaultSeries !== data.id) {
       regionSeries.hidden = true;
-    }
-  } // Check for grouped regions
-
-
+    } 
+  } 
+  
+  // Check for grouped regions
   if (Array.isArray(data.regionGroups) && data.regionGroups.length) {
     groupedSeries = im.pushGroupSeries(id, data);
     groupedSeries.forEach(function (regionSerie) {
@@ -1844,6 +2002,12 @@ iMapsManager.pushSeries = function (id, data) {
         regionSerie.hidden = true;
         regionSerie.mapID = data.id;
       }
+
+      // hide in case we have a live filter and this is not the default
+        if (parentData.liveFilter && im.bool(parentData.liveFilter.enabled) && defaultSeries && defaultSeries !== data.id) {
+            regionSerie.hidden = true;
+        } 
+
     });
   } // let's add lines before markers, so that the markers then overlay the end of lines, in case
 
@@ -1871,12 +2035,9 @@ iMapsManager.pushSeries = function (id, data) {
     if (isDrill) {
       markerSeries.hidden = true;
       markerSeries.mapID = data.id;
-    } // hide in case we have a live filter and this is not the default
-
-
-    if (parentData.liveFilter && im.bool(parentData.liveFilter.enabled) && defaultSeries && defaultSeries !== data.id) {
-      markerSeries.hidden = true;
-    }
+    } 
+    
+   
 
     // clusters in overlay maps
     if (data.clusterMarkers && im.bool(data.clusterMarkers.enabled)) {
@@ -1885,10 +2046,21 @@ iMapsManager.pushSeries = function (id, data) {
       clusterSeries[data.id].zoomLevels[data.clusterMarkers.zoomLevel] = markerSeries; // we setup the main index series (zoom=1) to be visible
       // when doing it inside setupClusters function, there was a bug
 
-      if (!isDrill && clusterSeries[data.id].zoomLevels[1]) {
+      if (!isDrill && clusterSeries[data.id].zoomLevels[1] ) {
         clusterSeries[data.id].zoomLevels[1].hidden = false;
+
+        // if there's a live filter, double check - we hidde them.
+        // otherwise overlaid series with clusters were always displaying, even when they shouldn't
+        if (parentData.liveFilter && im.bool(parentData.liveFilter.enabled) && defaultSeries && defaultSeries !== data.id) {
+            clusterSeries[data.id].zoomLevels[1].hidden = true;
+        } 
       }
     }
+
+     // hide in case we have a live filter and this is not the default
+     if (parentData.liveFilter && im.bool(parentData.liveFilter.enabled) && defaultSeries && defaultSeries !== data.id) {
+        markerSeries.hidden = true;
+      } 
   }
 
   if (Array.isArray(data.iconMarkers) && data.iconMarkers.length) {
@@ -1963,6 +2135,13 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
   regionSeries.name = data.regionLegend && data.regionLegend.title !== "" ? data.regionLegend.title : data.title;
   regionSeries.hiddenInLegend = data.regionLegend ? !im.bool(data.regionLegend.enabled) : true; // if it's a base series
 
+  // always hide group series from legend?
+  /*
+  if(groupHover){
+    regionSeries.hiddenInLegend = true;
+  }
+  */
+
   if (id === data.id) {
     // add it as the baseSeries - which will contain all region base series
     if( typeof im.maps[id].baseSeries === 'undefined' ){
@@ -1991,6 +2170,10 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
   // if (Array.isArray(data.regions)) {
 
   regionSeries.data = data.regions; // Configure series
+
+  if( groupHover ){
+    regionSeries.groupHover = true;
+  }
 
   regionTemplate = regionSeries.mapPolygons.template;
   im.setupTooltip(id, regionSeries, data); // check for custom tooltip template
@@ -2045,12 +2228,22 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
   regionTemplate.stroke = data.visual.borderColor;
   regionTemplate.strokeWidth = data.visual.borderWidth; // fill
 
-  regionTemplate.propertyFields.fill = "fill"; // exploring adapter
-
+  regionTemplate.propertyFields.fill = "fill"; 
+  
+  // exploring adapter
   /*
   	regionTemplate.adapter.add("fill", function(fill, target) {
-  		return chart.colors.getIndex(Math.round(Math.random() * 4)).saturate(0.3);
-  	});*/
+  		if(Array.isArray(fill)){
+        let gradient = new am4core.LinearGradient();
+        fill.forEach(function(color){
+          gradient.addColor(am4core.color(color));
+        });
+        fill = gradient;
+      }
+      return fill;
+  	});
+    */
+    
   // hover - only create if it's not a group hover series
 
   if (!groupHover) {
@@ -2059,13 +2252,14 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
     } else {
       hover = regionTemplate.states.create("hover");
       hover.propertyFields.fill = "hover";
-    } //hover.propertyFields.strokeWidth = "borderWidthHover";
+    } 
+    //hover.propertyFields.strokeWidth = "borderWidthHover";
     //hover.propertyFields.stroke = "borderColorHover";
-
-  } // active state
-
-
+  } 
+    
+  // active state
   if (data.regionActiveState && im.bool(data.regionActiveState.enabled)) {
+
     active = regionTemplate.states.create("active");
 
     if (data.regionActiveState.source === 'custom') {
@@ -2073,9 +2267,8 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
     } else {
       active.propertyFields.fill = "hover";
     }
-  } // highlight - for group hover
-
-
+  } 
+  // highlight - for group hover
   highlight = regionTemplate.states.create("highlight");
   highlight.propertyFields.fill = "hover";
 
@@ -2119,7 +2312,17 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
 
     var labelSeries = map.series.push(new am4maps.MapImageSeries());
     var labelTemplate = labelSeries.mapImages.template.createChild(am4core.Label);
-    
+   
+    // Label Background - currently only possible with global
+    var background = typeof igmLabelsBackground !== 'undefined' ? igmLabelsBackground : false;
+    if ( typeof background === 'object' ) {
+      labelTemplate.background = new am4core.RoundedRectangle();
+      labelTemplate.background.cornerRadius(...background.cornerRadius);
+      labelTemplate.background.fill = am4core.color( background.color );
+      labelTemplate.padding(...background.padding);
+      labelTemplate.background.stroke = am4core.color( background.stroke );
+    }  
+
     im.maps[id].labelSeries.push(labelSeries);
     
     labelTemplate.horizontalCenter = data.regionLabels.horizontalCenter;
@@ -2243,9 +2446,9 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
 
         if (typeof polygon.dataItem.dataContext.originalID !== 'undefined') {
           label.groupRegion = polygon.dataItem.dataContext.originalID;
-        } // tooltip content
-
-
+        } 
+        
+        // tooltip content
         label.tooltipDataItem = polygon.tooltipDataItem;
         label.tooltip = polygon.tooltip;
         label.tooltipHTML = polygon.tooltipHTML;
@@ -2310,19 +2513,21 @@ iMapsManager.pushRoundMarkerSeries = function (id, data) {
     circle.fill = data.markerDefaults.fill;
     circle.stroke = am4core.color("#FFFFFF");
     circle.strokeWidth = 1;
-    circle.nonScaling = true; // label
-
+    circle.nonScaling = typeof igmRoundMarkersNonScaling !== 'undefined' ? igmRoundMarkersNonScaling : true;
+    
+    // label
     label = markerSeriesTemplate.createChild(am4core.Label);
     label.text = "{label}";
     label.fill = am4core.color("#fff");
     label.verticalCenter = "middle";
     label.horizontalCenter = "middle";
-    label.nonScaling = true;
-    label.fontSize = data.markerDefaults.radius;
+    label.nonScaling = typeof igmRoundMarkersNonScaling !== 'undefined' ? igmRoundMarkersNonScaling : true;
+    label.fontSize = typeof igmClusterMarkerFontSize !== 'undefined' ? igmClusterMarkerFontSize : data.markerDefaults.radius;
     label.clickable = false;
     label.focusable = false;
-    label.hoverable = false; // check for custom tooltip template
-
+    label.hoverable = false; 
+    
+    // check for custom tooltip template
     if (typeof data.roundMarkersTooltipTemplate !== 'undefined' && data.roundMarkersTooltipTemplate.trim() !== '') {
       circle.tooltipText = data.roundMarkersTooltipTemplate;
       circle.tooltipHTML = data.roundMarkersTooltipTemplate;
@@ -2371,7 +2576,16 @@ iMapsManager.pushRoundMarkerSeries = function (id, data) {
       markerLabel.text = typeof data.roundMarkerLabels.source !== "undefined" && data.roundMarkerLabels.source !== '' ? data.roundMarkerLabels.source : "{name}";
       markerLabel.horizontalCenter = "middle";
       markerLabel.fontSize = data.roundMarkerLabels.fontSize;
-      markerLabel.nonScaling = true; //im.bool(data.roundMarkerLabels.nonScaling);
+
+      //for mobile devices
+      if (data.roundMarkerLabels.mobileSize && parseInt(data.roundMarkerLabels.mobileSize) !== 100) {
+        if (window.innerWidth <= 780) {
+          markerLabel.fontSize = parseInt(data.roundMarkerLabels.fontSize) * parseInt(data.roundMarkerLabels.mobileSize) / 100;
+        }
+      }
+
+      markerLabel.nonScaling = typeof igmRoundMarkersNonScaling !== 'undefined' ? igmRoundMarkersNonScaling : true; 
+      //im.bool(data.roundMarkerLabels.nonScaling);
 
       markerLabel.fill = data.roundMarkerLabels.fill;
       markerLabel.clickable = false;
@@ -2614,6 +2828,7 @@ iMapsManager.pushIconMarkerSeries = function (id, data) {
   return markerSeries;
 };
 
+
 iMapsManager.pushLineSeries = function (id, data) {
   var im = this,
     map = im.maps[id].map,
@@ -2639,12 +2854,23 @@ iMapsManager.pushLineSeries = function (id, data) {
     lineSeries.mapLines.template.propertyFields.strokeDasharray = "strokeDash";
     lineSeries.mapLines.template.propertyFields.stroke = "stroke";
 
-    data.lines.forEach(function (lineObj) {
+    // arrow
+    lineSeries.mapLines.template.arrow.position = 1; // 1 is the end
+    lineSeries.mapLines.template.arrow.nonScaling = true;
+    lineSeries.mapLines.template.arrow.propertyFields.fill = "stroke";
+    lineSeries.mapLines.template.arrow.horizontalCenter = "middle";
+    //lineSeries.mapLines.template.arrow.tooltipHTML = "{title}";
+
+    //lineSeries.mapLines.template.arrow.disabled = true;
+    lineSeries.mapLines.template.arrow.propertyFields.disabled = "arrowDisabled";
+
+    data.lines.forEach(function (lineObj, index) {
       // make sure multiGeoLine is array of arrays:
       lineObj.multiGeoLine = [lineObj.multiGeoLine];
       lineData.push(lineObj);
-    }); // events - to do
-
+    });      
+    
+    // events - to do
     lineSeries.mapLines.template.events.on("hit", function (ev) {
       im.singleHit(id, ev);
       im.setupHitEvents(id, ev);
@@ -2652,8 +2878,10 @@ iMapsManager.pushLineSeries = function (id, data) {
     lineSeries.mapLines.template.events.on("over", function (ev) {
       im.setupHoverEvents(id, ev);
     });
-    lineSeries.data = lineData; // enable small map
 
+    lineSeries.data = lineData; 
+    
+    // enable small map
     if (data.zoom && data.zoom.smallMap && im.bool(data.zoom.smallMap)) {
       map.smallMap.series.push(lineSeries);
     } //let's hide this from legend, since they don't group in the same Series
@@ -2674,29 +2902,6 @@ iMapsManager.pushLineSeries = function (id, data) {
 };
 
 
-iMapsManager.createArrow = function (line, reverse) {
-  var arrow = line.createChild(am4maps.MapLineObject);
-  arrow.shouldClone = false;
-  arrow.width = 8;
-  arrow.height = 10;
-  arrow.mapLine = line;
-  arrow.position = 0.5;
-  arrow.adjustRotation = true;
-
-  var triangle = arrow.createChild(am4core.Triangle);
-  //triangle.shouldClone = false;
-  triangle.fillOpacity = 1;
-  triangle.width = am4core.percent(100);
-  triangle.height = am4core.percent(100);
-  triangle.rotation = 90;
-  triangle.horizontalCenter = "middle";
-  triangle.verticalCenter = "middle";
-  if (reverse) {
-    triangle.direction = "bottom";
-  }
-
-  return arrow;
-}
 
 iMapsManager.pushLabelSeries = function (id, data) {
   var im = this,
@@ -2707,25 +2912,30 @@ iMapsManager.pushLabelSeries = function (id, data) {
     label,
     activeState,
     highlightState,
-    hoverState;
+    hoverState,
+    background = false;
 
   if (Array.isArray(data.labels) && data.labels.length) {
     // Create image series
     labelSeries = map.series.push(new am4maps.MapImageSeries());
     labelSeries.name = data.roundMarkersLegend && data.roundMarkersLegend.title !== "" ? data.roundMarkersLegend.title : data.title;
-    labelSeries.hiddenInLegend = data.roundMarkersLegend ? !im.bool(data.roundMarkersLegend.enabled) : false; // Create a circle image in image series template so it gets replicated to all new images
-
+    labelSeries.hiddenInLegend = data.roundMarkersLegend ? !im.bool(data.roundMarkersLegend.enabled) : false; 
+    
     labelSeriesTemplate = labelSeries.mapImages.template;
-    labelSeriesTemplate.setStateOnChildren = true; // label
+    labelSeriesTemplate.setStateOnChildren = true; 
 
+    // label
     label = labelSeriesTemplate.createChild(am4core.Label);
     label.text = "{id}";
-    label.nonScaling = true;
+
+    //label.nonScaling = true;
+    label.nonScaling = typeof igmLabelsNonScaling !== 'undefined' ? igmLabelsNonScaling : true;
 
     if (data.labelStyle) {
       label.fontFamily = data.labelStyle.fontFamily;
       label.fontWeight = data.labelStyle.fontWeight;
     }
+
 
     label.horizontalCenter = data.labelPosition.horizontalCenter;
     label.verticalCenter = data.labelPosition.verticalCenter;
@@ -2739,16 +2949,28 @@ iMapsManager.pushLabelSeries = function (id, data) {
     } else {
       label.tooltipText = data.tooltip && data.tooltip.template ? data.tooltip.template : "{tooltipContent}";
       label.tooltipHTML = data.tooltip && data.tooltip.template ? data.tooltip.template : "{tooltipContent}";
-    } // Set property fields
-
-
+    } 
+    
+    // Set property fields
     labelSeriesTemplate.propertyFields.latitude = "latitude";
     labelSeriesTemplate.propertyFields.longitude = "longitude";
     labelSeriesTemplate.propertyFields.fill = "fill";
     labelSeriesTemplate.propertyFields.fontSize = "fontSize";
     label.propertyFields.verticalCenter = "verticalCenter";
-    label.propertyFields.horizontalCenter = "horizontalCenter"; // hover & active
+    label.propertyFields.horizontalCenter = "horizontalCenter"; 
+    
 
+    // labels background - currently only possible through global
+    background = typeof igmLabelsBackground !== 'undefined' ? igmLabelsBackground : false;
+    if ( typeof background === 'object' ) {
+      label.background = new am4core.RoundedRectangle();
+      label.background.cornerRadius(...background.cornerRadius);
+      label.background.fill = am4core.color( background.color );
+      label.padding(...background.padding);
+      label.background.stroke = am4core.color( background.stroke );
+    }    
+
+    // hover & active
     hoverState = label.states.create("hover");
     hoverState.properties.fill = data.hover;
     hoverState.propertyFields.fill = "hover"; // active
@@ -2818,11 +3040,16 @@ iMapsManager.setupTooltip = function (id, series, data, marker) {
     return series;
   }
 
+
+
   //if it's overlay, it might have a custom config
 
   // tooltip settings from map config
   series.tooltip.label.interactionsEnabled = im.bool(tooltip.fixed);
   series.tooltip.background.cornerRadius = tooltip.cornerRadius;
+  if( tooltip.pointerLength ){
+    series.tooltip.background.pointerLength = parseInt( tooltip.pointerLength );
+  }
   series.tooltip.getFillFromObject = false;
   series.tooltip.getStrokeFromObject = false;
   series.tooltip.label.fill = tooltip.color;
@@ -2860,6 +3087,27 @@ iMapsManager.setupTooltip = function (id, series, data, marker) {
     if (series.mapPolygons) {
       series.calculateVisualCenter = true;
       series.mapPolygons.template.tooltipPosition = "fixed";
+
+      // in case it's a group and the tooltip is set to fixed, 
+      // we need to set the tooltip hover to have the regions keep the hover state
+      if( series.groupHover ){
+
+         // set to false so that the tooltip does not 
+        // inherit the highlight state color on hover
+        series.tooltip.getFillFromObject = false;
+        series.tooltip.events.on('over', function(ev) {
+          ev.target.dataItem.component.mapPolygons.each(function(polygon) {
+            polygon.setState("highlight");
+          }); 
+        });
+        series.tooltip.events.on('out', function(ev) {
+          ev.target.dataItem.component.mapPolygons.each(function(polygon) {
+            polygon.setState("default");
+          }); 
+        });
+
+      }
+
       series.tooltip.keepTargetHover = true;
 
       if (tooltip.showTooltipOn) {
@@ -2902,7 +3150,6 @@ iMapsManager.setupTooltip = function (id, series, data, marker) {
       }
     }
   }
-
   return series;
 };
 
@@ -2922,12 +3169,21 @@ iMapsManager.setupHitEvents = function (id, ev) {
   var im = this,
     data = im.maps[id].data,
     dataContext,
-    map = im.maps[id],
+    map = im.maps[id].map,
     customActionName,
     targetType = im.getTargetSeriesType(ev.target),
     clicked = im.maps[id].clicked || false,
     zoomCluster = data.clusterMarkers ? parseFloat(data.clusterMarkers.zoomLevel) : 1,
-    currentRegion, mapFunction;
+    currentRegion, mapFunction, 
+    container = document.getElementById(data.container),
+    event = new Event("mapEntryClicked");
+
+    if( map.lastClickedEntry === ev.target ){
+        return;
+    }
+
+    map.lastClickedEntry = ev.target;
+    container.dispatchEvent(event);
 
   if (ev.target.isLabels) {
     dataContext = ev.target.dataItems.first.dataContext;
@@ -2940,15 +3196,13 @@ iMapsManager.setupHitEvents = function (id, ev) {
     if (dataContext.cluster) {
       // if we're far from the max, let's just zoom half
       if (zoomCluster - parseInt(map.zoomLevel) > 5) {
-        zoomCluster = zoomCluster / 2;
+        zoomCluster = parseInt(map.zoomLevel) + (zoomCluster/2);
       }
-
       ev.target.series.chart.zoomToMapObject(ev.target, zoomCluster);
     }
   } // for admin log
 
 
-  im.populateClickInfo(dataContext);
   console.log(dataContext); // Zoom on click
 
   if (data.zoom && im.bool(data.zoom.enabled) && im.bool(data.zoom.zoomOnClick)) {
@@ -3006,8 +3260,8 @@ iMapsManager.setupHitEvents = function (id, ev) {
   }
 
   if (dataContext.action === "none") {
-
-  } // do nothing
+    // do nothing   
+  } 
   // open new url
   else if (dataContext.action === "open_url" && dataContext.content !== "") {
     dataContext.content = iMapsManager.parseHtmlEntities(dataContext.content);
@@ -3132,15 +3386,25 @@ iMapsManager.setupHoverEvents = function (id, ev) {
     });
   }
 
+ 
   // we exclude touch devices, since the hover event is also triggered on tap, otherwise we have 2 select events triggered
   if (im.bool(dataContext.triggerClickOnHover) && (!iMapsManager.isTouchScreendevice() || ev.type === 'over') && (typeof iMaps.maps[id].mapClicked === 'undefined' || iMaps.maps[id].mapClicked === false)) {
-    iMapsManager.select(id, dataContext.id, false, false, dataContext.mapID, false);
+    iMapsManager.select(id, dataContext.id, false, true, dataContext.mapID, false);
+  }
+
+  // if it's a marker and we want to trigger hover event also on associated regions in marker value
+  if(im.bool(dataContext.triggerRegionHover) && dataContext.val && dataContext.val !== '' ){
+    iMapsManager.hover(id, dataContext.val );
+    ev.target.events.on("out",function(ev){
+      iMapsManager.clearHovered(id);
+    });
   }
 };
 
 iMapsManager.singleHit = function (id, ev) {
   var im = this,
-    dataContext;
+    dataContext,
+    data = im.maps[id].data;
 
   if (ev.target.isLabels) {
     dataContext = ev.target.dataItems.first.dataContext;
@@ -3156,18 +3420,27 @@ iMapsManager.singleHit = function (id, ev) {
     iMaps.maps[id].mapClicked = true;
   }
 
+
+  // causes issues on tap on mobile, we need to click twice? 
+  // seems the clear selected is affecting
+
+  // update:
+  // let's try passing second argument as false if tooltip is set to display on click?
+  let keepThis = true;
+  if( data.tooltip && data.tooltip.showTooltipOn === 'hit' ){
+    keepThis = false;
+  }
+  iMapsManager.clearSelected(id, keepThis, true );
+
   ev.target.isActive = true;
   ev.target.isHover = true;
   ev.target.setState("active");
-  iMapsManager.clearSelected(id, ev.target);
   im.maps[id].selected = [ev.target];
 };
 
 iMapsManager.groupHit = function (id, ev) {
   var im = this,
     selected = im.maps[id].selected || false;
-
-  console.log('group hit');
 
   if (ev.target.dataItem.dataContext.madeFromGeoData) {
     return;
@@ -3183,17 +3456,17 @@ iMapsManager.groupHit = function (id, ev) {
   selected = [];
 
   ev.target.parent.mapPolygons.each(function (polygon) {
+
     // added the typeof contorl to only run code on original clicked/hit entry and not the individual shape
-    if (!polygon.dataItem.dataContext.madeFromGeoData && typeof polygon.dataItem.dataContext.originalID === 'undefined') {
+    // removed, because the code wasn't runnning otherwise -> && typeof polygon.dataItem.dataContext.originalID === 'undefined'
+    if (!polygon.dataItem.dataContext.madeFromGeoData ) {
       // toggle active state
       polygon.setState("active");
-
+      polygon.isHover = true;
 
       //removed to fix bug when hovering groups after clicked ?
       polygon.isActive = true;
       polygon.isGroupActive = true;
-
-      polygon.isHover = true;
       selected.push(polygon);
     }
   });
@@ -3216,9 +3489,8 @@ iMapsManager.groupHover = function (id, ev) {
   }
 
   if (im.bool(dataContext.triggerClickOnHover) && (typeof iMaps.maps[id].mapClicked === 'undefined' || iMaps.maps[id].mapClicked === false)) {
-    iMapsManager.select(id, dataContext.id, false, false, dataContext.mapID, false);
+    iMapsManager.select(id, dataContext.id, false, true, dataContext.mapID, false);
   } // set mouse hover pointer cursor
-
 
   if (ev.target.dataItem.dataContext.action && ev.target.dataItem.dataContext.action != "none") {
     ev.target.cursorOverStyle = am4core.MouseCursorStyle.pointer;
@@ -3239,8 +3511,9 @@ iMapsManager.groupHoverOut = function (id, ev) {
     return;
   }
 
+
   ev.target.parent.mapPolygons.each(function (polygon) {
-    if (!polygon.isGroupActive) {
+    if (!polygon.isGroupActive ) {
       polygon.setState("default");
       polygon.isActive = false;
       polygon.isHover = false;
@@ -3270,12 +3543,12 @@ iMapsManager.getRegionsByValue = function (id, value, parameter) {
   series.forEach(function (serie) {
     seriesType = im.getTargetSeriesType(serie);
     if (seriesType === 'MapPolygonSeries') {
-      tempArray = serie.mapImages.values.filter(function (entry) {
+      tempArray = serie.mapPolygons.values.filter(function (entry) {
         if (entry.dataItem.dataContext[parameter] === value || value === '*' ) {
           return true;
         }
       });
-      regions = regions.concat(regions);
+      regions = regions.concat(tempArray);
     }
   });
 
@@ -3341,7 +3614,8 @@ iMapsManager.select = function (id, elID, forceFixedTooltip, showTooltip, series
     ogID,
     customRegionGroup = true,
     triggered = false, // temp solution to prevent map from triggering multiple click actions if there are entries with same ID in different layers
-    isGroup = false;
+    isGroup = false,
+    keepThis = true;
 
   // map sure it's string
   if (Number.isInteger(elID)) {
@@ -3367,11 +3641,20 @@ iMapsManager.select = function (id, elID, forceFixedTooltip, showTooltip, series
     thisSeries = seriesByID[seriesMapID];
   }
 
-  iMapsManager.clearSelected(id);
-
   if (typeof click === 'undefined') {
     click = true;
+  } else { 
+    click = false 
   }
+
+  // we pass the click as the 'skipReset' - if not a real click, its the hover and we skip the reset to prevent flickering
+  // second argument, the keepThis set to true, to avoid removing hover status of selected/hovered entry
+  // update - second argument might be set to false, if tooltip only displays on hit to fix issue where the tooltip wouldn't close
+  if( data.tooltip && data.tooltip.showTooltipOn === 'hit' ){
+    keepThis = false;
+  }
+
+  iMapsManager.clearSelected(id, keepThis, ! click);
 
   if (click) {
     iMaps.maps[id].activeStateControl = true;
@@ -3405,6 +3688,12 @@ iMapsManager.select = function (id, elID, forceFixedTooltip, showTooltip, series
         if (select && typeof select.dataItem.dataContext.originalID !== 'undefined' && select.dataItem.dataContext.originalID.includes(',')) {
           elID = select.dataItem.dataContext.originalID;
         }
+
+        // show series if it's hidden
+        if( select ){
+            series[i].show();
+        }
+        
 
         // check if group
         if (elID.includes(',')) {
@@ -3531,9 +3820,15 @@ iMapsManager.select = function (id, elID, forceFixedTooltip, showTooltip, series
           // hilight
           group = elID.split(',');
           group.forEach(function (rxid, indx) {
+
             select = series[i].getImageById(rxid);
 
+
             if (typeof select !== 'undefined' && select) {
+
+                // show series if it's hidden
+                series[i].show();
+
               if (forceFixedTooltip) {
 
                 defaultTooltipShowOn = select.showTooltipOn;
@@ -3558,6 +3853,10 @@ iMapsManager.select = function (id, elID, forceFixedTooltip, showTooltip, series
         else {
           let selectMarker = series[i].getImageById(elID);
           if (selectMarker) {
+
+            // show series if it's hidden
+            series[i].show();
+
             let timeoutM = 0;
              //check if globe to rotate
              if (data.projection === 'Orthographic' ) {
@@ -3880,12 +4179,12 @@ iMapsManager.drillTo = function (id, ev, currentRegion, customMap) {
     allCurrentSeries = iMapsManager.maps[id].series,
     baseSeries = iMapsManager.maps[id].baseSeries,
     allBaseSeries = iMapsManager.maps[id].allBaseSeries,
+    bgSeries = im.maps[id].backgroundSeries,
     opacity,
     i,
     len; 
     
     opacity = typeof igmDrilldownBaseMapOpacity !== 'undefined' ? igmDrilldownBaseMapOpacity : 0.3,
-
 
    // hide all others except this one and baseSeries
   // if were opening a custom map
@@ -3897,6 +4196,9 @@ iMapsManager.drillTo = function (id, ev, currentRegion, customMap) {
       // let's check if new option to keep base map is enabled
       if (typeof data.alwaysKeepBase === 'undefined' || !im.bool(data.alwaysKeepBase)) {
         allCurrentSeries[i].opacity = opacity;
+
+        // hide image background
+        bgSeries.opacity = opacity;
       }
     } else if (allBaseSeries.includes(allCurrentSeries[i])) {
       // let's check if new option to keep base map is enabled
@@ -3919,7 +4221,7 @@ iMapsManager.drillTo = function (id, ev, currentRegion, customMap) {
 
     if (customMap) {
       console.log('drill to specific map');
-      im.zoomToMap(ev, currentRegion, id);
+      im.zoomToMap(ev, currentRegion);
       return;
     }
 
@@ -3948,7 +4250,7 @@ iMapsManager.drillDown = function (id, ev) {
   if (!mapName || !isNaN(targetID)) {
     // well, let's only return if it's not showing another map
     // code needs better logic...
-    if (_typeof(clicked) === undefined || clicked.action != 'igm_display_map') {
+    if (_typeof(clicked) === undefined || clicked.action !== 'igm_display_map') {
       return false;
     }
   }
@@ -3982,9 +4284,8 @@ iMapsManager.drillDown = function (id, ev) {
       if (currentRegion === ev.target.series) {
         iMapsManager.maps[id].isDrilling = false;
         return;
-      } // if target is base series, show it
-
-
+      } 
+      // if target is base series, show it
       if (baseSeries.includes( ev.target.series ) ) {
         iMapsManager.maps[id].isDrilling = false;
         iMapsManager.maps[id].drilledTo = false; 
@@ -4062,12 +4363,13 @@ iMapsManager.getHighlighted = function (id) {
   }
 };
 
-iMapsManager.clearSelected = function (id, keepThis) {
+iMapsManager.clearSelected = function (id, keepThis, skipReset) {
   var im = this,
     map = im.maps[id],
     selected = map.selected || []; // to keep the state of this element
 
   keepThis = keepThis || false;
+  skipReset = skipReset || false;
 
   if (Array.isArray(selected) && selected.length > 0) {
     selected.forEach(function (polygon, index) {
@@ -4076,7 +4378,12 @@ iMapsManager.clearSelected = function (id, keepThis) {
         polygon.isActive = false;
         polygon.isGroupActive = false;
 
+        // there were some issues on mobile tap (singleHit) where the tooltip woudl disappear, 
+        // so we added this check before hiding the tooltip
+       if ( ! keepThis ) {
         polygon.hideTooltip(0); // needed to hide tooltip
+       }
+
         polygon.setState("default");
 
       }
@@ -4085,7 +4392,10 @@ iMapsManager.clearSelected = function (id, keepThis) {
   }
 
   if (!keepThis && typeof iMapsActions !== 'undefined') {
-    iMapsActions.resetActions(id);
+
+    if( ! skipReset ){
+      //iMapsActions.resetActions(id);
+    }
     map.selected = [];
   } else {
     map.selected = [keepThis];
@@ -4302,9 +4612,12 @@ iMapsManager.clearHovered = function (id, eID) {
   else {
     if (hovered) {
       hovered.forEach(function (hov) {
+
         hov.dispatchImmediately("out");
-        hov.setState("default");
-        hov.isHover = false;
+        if( typeof hov.isGroupActive === 'undefined' || ! hov.isGroupActive ){
+            hov.setState("default");
+            hov.isHover = false;
+        }
         if(typeof hov.children !== 'undefined'){
           hov.children.each(function(child){
             if(child.className === 'Circle'){
@@ -4427,11 +4740,13 @@ iMapsManager.setupClusters = function (data, id, overlay) {
     biasLevels.push(prevBias);
     prevBias = prevBias / 2;
     zoomLevels.push(maxZoomLevel);
-    maxZoomLevel = Math.ceil(maxZoomLevel / 2);
+
+    // make sure the last one is set to 1, otherwise it will be hidden
+    maxZoomLevel = i == 3 ? 1 : Math.ceil(maxZoomLevel / 2);
     i++;
-  } // reverse array to match detail level
-
-
+  } 
+  
+  // reverse array to match detail level
   zoomLevels.reverse().pop();
   biasLevels.pop();
 
@@ -4444,6 +4759,7 @@ iMapsManager.setupClusters = function (data, id, overlay) {
 
   if (Array.isArray(data.roundMarkers)) {
     biasLevels.forEach(function (item, index) {
+            
       series = geocluster(data.roundMarkers, item, data.markerDefaults, tooltipTemplate);
       tempData = Object.assign({}, data);
       tempData.roundMarkers = series;
@@ -4458,7 +4774,10 @@ iMapsManager.setupClusters = function (data, id, overlay) {
         // im.maps[id].allBaseSeries.push(markerSeries);
       }
 
-      markerSeries.hidden = true;
+      // hide all series except the first
+      //if (index > 0 ) {
+        markerSeries.hidden = true;
+      //}
     });
   }
 
@@ -4477,7 +4796,7 @@ iMapsManager.triggerOnReady = function (id, data) {
   if (myParam) {
     //if it's a custom map, do nothing, we will trigger it on the map appeared event
     if (!isCustom) {
-      iMapsManager.select(id, myParam);
+      iMapsManager.select(id, myParam, true, true);
     }
   }
 }
@@ -4496,7 +4815,7 @@ iMapsManager.triggerOnAppeared = function (id, data) {
     //if it's a custom map, do nothing, we will trigger it on the map appeared event
     if (isCustom) {
       setTimeout(function () {
-        iMapsManager.select(id, myParam);
+        iMapsManager.select(id, myParam, true, true);
       }, 500);
     }
   }
@@ -4544,7 +4863,7 @@ iMapsManager.handleInfoBox = function (id) {
   var im = this,
     map = im.maps[id].map,
     events = ["ready", "mappositionchanged", "zoomlevelchanged"],
-    container = document.getElementById("map_tech_info"),
+    container = document.getElementById("map_visual_info"),
     coordinatesc = document.getElementById("map_click_events_coordinates"),
     series = im.maps[id].series;
 
@@ -4559,6 +4878,7 @@ iMapsManager.handleInfoBox = function (id) {
   }
 
   if (coordinatesc) {
+    
     map.events.on("hit", function (ev) {
       var coordinates = map.svgPointToGeo(ev.svgPoint);
       var lat = Number(coordinates.latitude).toFixed(6);
@@ -4586,6 +4906,7 @@ iMapsManager.handleInfoBox = function (id) {
       coordinatesc.innerHTML = '';
       coordinatesc.appendChild(latEl);
       coordinatesc.appendChild(longEl);
+      coordinatesc.parentElement.style.display = 'block';
       var event = new CustomEvent("mapPointClicked", {
         detail: {
           latitude: lat,
@@ -4601,37 +4922,22 @@ iMapsManager.populateInfo = function (id, container) {
   var im = this,
     map = im.maps[id].map,
     info = "";
-  info += "Zoom Level: " + parseFloat(Number(map.zoomLevel).toFixed(2)) + "<br>";
-  info += "Center Coordinates: <br>" + "LAT " + Number(map.zoomGeoPoint.latitude).toFixed(6) + "<br>" + "LONG " + Number(map.zoomGeoPoint.longitude).toFixed(6) + "<br>";
-  container.innerHTML = info;
-};
-
-iMapsManager.populateClickInfo = function (data) {
-  var container = document.getElementById("map_click_events_info"),
-    info = "";
-
-  if (container && data) {
-    info += "ID: " + data.id + "<br>";
-
-    if (data.name) {
-      info += "Name: " + data.name + "<br>";
-    }
-
-    if (data.latitude) {
-      info += "LAT: " + Number(data.latitude).toFixed(6) + "<br>";
-      info += "LONG: " + Number(data.longitude).toFixed(6) + "<br>";
-    }
-
-    if (data.action) {
-      info += "Action: " + data.action.replace("igm_", "") + "<br>";
-    }
-
+    info += "Zoom Level: " + parseFloat(Number(map.zoomLevel).toFixed(2)) + "<br>";
+    info += "Center Coordinates: <br>" + "LAT " + Number(map.zoomGeoPoint.latitude).toFixed(6) + "<br>" + "LONG " + Number(map.zoomGeoPoint.longitude).toFixed(6) + "<br>";
     container.innerHTML = info;
-  }
+
+    let centerData = {
+      "zoom" : parseFloat(Number(map.zoomLevel).toFixed(2)),
+      "lat"  : Number(map.zoomGeoPoint.latitude).toFixed(6),
+      "long" : Number(map.zoomGeoPoint.longitude).toFixed(6)
+    };
+
+    container.setAttribute('data-visual',JSON.stringify(centerData));
 };
 
 iMapsManager.hideAllSeries = function (id, keepBase) {
-  id = parseInt(id);
+
+    id = parseInt(id);
 
   if (!id) {
     return;
@@ -4659,7 +4965,8 @@ iMapsManager.hideAllSeries = function (id, keepBase) {
 };
 
 iMapsManager.showAllSeries = function (id) {
-  id = parseInt(id);
+
+    id = parseInt(id);
 
   if (!id) {
     return;
@@ -4797,39 +5104,33 @@ iMapsManager.handleExternalZoom = function (id) {
   mapBox.parentNode.insertBefore(controls, mapBox.nextSibling);
 };
 
-iMapsManager.openFullscreen = function (elem) {
-  if (elem.requestFullscreen) {
-    elem.requestFullscreen();
-  } else if (elem.mozRequestFullScreen) {
-    /* Firefox */
-    elem.mozRequestFullScreen();
-  } else if (elem.webkitRequestFullscreen) {
-    /* Chrome, Safari and Opera */
-    elem.webkitRequestFullscreen();
-  } else if (elem.msRequestFullscreen) {
-    /* IE/Edge */
-    elem.msRequestFullscreen();
-  }
-};
-/* Close fullscreen */
+iMapsManager.toggleFullscreen = function(element) {
 
-
-iMapsManager.closeFullScreen = function () {
-  if (document.exitFullscreen) {
-    document.exitFullscreen();
-  } else if (document.mozCancelFullScreen) {
-    /* Firefox */
-    document.mozCancelFullScreen();
-  } else if (document.webkitExitFullscreen) {
-    /* Chrome, Safari and Opera */
-    document.webkitExitFullscreen();
-  } else if (document.msExitFullscreen) {
-    /* IE/Edge */
-    document.msExitFullscreen();
-  }
-
-  iMapsManager.isFullScreen = false;
-};
+    // se não está em tela cheia
+    if (!document.fullscreen && !document.webkitIsFullScreen) {     
+        // solicitar tela cheia
+        if (element.requestFullscreen) {               // default
+        element.requestFullscreen();
+        } else if (element.mozRequestFullScreen) {     // Mozilla
+        element.mozRequestFullScreen();
+        } else if (element.webkitRequestFullscreen) {  // Chrome e Safari
+        element.webkitRequestFullscreen();
+        } else if (element.msRequestFullscreen) {      // Internet Explorer
+        element.msRequestFullscreen();
+        }
+    } else { // exit fullscreen 
+        if (document.exitFullscreen) {              // default
+            document.exitFullscreen();
+        } else if (document.mozCancelFullScreen) {  // Mozilla
+            document.mozCancelFullScreen();      
+        } else if (document.webkitExitFullscreen) { // Chrome e Safari
+            document.webkitExitFullscreen();      
+        } else if (document.msExitFullscreen) {     // Internet Explorer
+            document.msExitFullscreen();
+        }
+        iMapsManager.isFullScreen = false;
+    }
+}
 
 iMapsManager.isTouchScreendevice = function () {
   return (('ontouchstart' in window) ||
@@ -4889,6 +5190,16 @@ iMaps.init = function (hold) {
   }
 
   if (hold) {
+    return;
+  }
+
+  if( typeof am4core === 'undefined' ){
+    console.log('Map files not loaded properly.');
+
+    let oxygen = document.querySelector('.oxygen-body .map_wrapper .map_render');
+    if(oxygen){
+      oxygen.innerHTML = 'Map Container. <br> Map will not render in Oxygen preview, but will render in live page.<br>Consider enabling the "Async Loading" option in the Settings > Performance page.';
+    }
     return;
   }
 

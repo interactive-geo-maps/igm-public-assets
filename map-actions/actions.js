@@ -1,7 +1,7 @@
 /**
  * Display content below the map
  */
-function igm_display_below(id, data) {
+ function igm_display_below(id, data) {
 	iMapsActions.contentBelow(id, data, false);
 	window.dispatchEvent(new Event('resize'));
 }
@@ -128,8 +128,17 @@ iMapsActions.buildDropdown = function (el) {
 
 	var opts = {
 		noResultsText: noResults,
+        position: 'bottom',
 		itemSelectText: select,
 		resetScrollPosition: false,
+        searchChoices: true,
+        fuseOptions: {
+            threshold: 0.4,
+            findAllMatches: true,
+            shouldSort: true
+        },
+        searchFloor: 2,
+		searchResultLimit: 50, // maybe set this as an option?
 	};
 
 	var choices = new Choices(el, opts);
@@ -268,9 +277,7 @@ iMapsActions.buildFilter = function (el) {
 				if (typeof iMapsManager !== 'undefined') {
 					iMapsManager.filteredMap = false;
 					iMapsManager.showAllSeries(thisMapID);
-
-
-
+                    iMapsManager.resetDrilldown( thisMapID );
 				}
 			} else {
 				if (typeof iMapsManager !== 'undefined') {
@@ -295,6 +302,7 @@ iMapsActions.buildFilter = function (el) {
 };
 
 iMapsActions.lightbox = false;
+iMapsActions.lightboxIsRunning = false;
 iMapsActions.lightboxAction = function (id, data, type) {
 	var elements = [],
 		width = iMapsActionOptions.lightboxWidth,
@@ -359,7 +367,8 @@ iMapsActions.lightboxAction = function (id, data, type) {
 		loop: false,
 		zoomable: false,
 		elements: elements,
-		closeButton: true,
+		closeButton: false, // changed when we added the custom close button
+        closeOnOutsideClick: true // changed when we added the custom close button
 	};
 
 	// fix for lightbox closing on bigger touch devices
@@ -369,14 +378,44 @@ iMapsActions.lightboxAction = function (id, data, type) {
 
 	if (!iMapsActions.lighbox) {
 		iMapsActions.lightbox = GLightbox(opts);
+
 	}
 
-	iMapsActions.lightbox.open();
+    // add custom close button
+    iMapsActions.lightbox.on('open', function(){
+        let close = document.querySelector('.ginner-container .gslide-media .igm_close');
+        if( ! close ) {
+            close = document.createElement('span');
+            close.classList.add('igm_close');
+            close.innerHTML = '╳';
+            let containers = document.querySelectorAll('.ginner-container .gslide-media');
+            containers.forEach(function(el){
+                let clone = close.cloneNode(true);
+                clone.addEventListener('click', function(){
+                    iMapsActions.lightbox.close();
+                });
+
+                el.prepend(clone);
+            });
+        } 
+
+    });
+
+	if( data.content !== '' && iMapsActions.lightbox && ! iMapsActions.lightboxIsRunning ){
+		iMapsActions.lightbox.open();
+		iMapsActions.lightboxIsRunning = true;
+	} else {
+		console.log('Empty Action Content or Incorrect Request - Lightbox not triggered');
+	}
+	
 	iMapsActions.lightbox.on('close', function(){
 		iMapsManager.clearSelected(id);
+        iMaps.maps[id].map.lastClickedEntry = false;
+		iMapsActions.lightboxIsRunning = false;
 	});
 
 };
+
 iMapsActions.contentBelow = function (id, data, scroll) {
 	// go 2 steps up to find map wrapper.
 	var originalTop,
@@ -404,7 +443,9 @@ iMapsActions.contentBelow = function (id, data, scroll) {
 	// hide
 	what2hide = mapContentContainer.firstChild;
 	if (what2hide) {
-		what2hide.style.display = 'none';
+		if( what2hide.style ){
+			what2hide.style.display = 'none';
+		}
 		footerContent.appendChild(what2hide);
 	}
 
@@ -413,7 +454,10 @@ iMapsActions.contentBelow = function (id, data, scroll) {
 	if (what2display) {
 
 		mapContentContainer.appendChild(what2display);
-		what2display.style.display = 'block';
+		if( what2display.style ){
+			what2display.style.display = 'block';
+		}
+		
 	}
 
 	if (scroll) {
@@ -1057,10 +1101,18 @@ iMapsActions.wpFeSanitizeTitle = function (title) {
 
 iMapsActions.resetContainer = function (id, selector) {
 	var mapContainer = document.getElementById("map_wrapper_" + id);
-	var mapContentContainer = mapContainer.querySelector(selector);
 	var footerContent = document.getElementById("igm-hidden-footer-content");
+	var mapContentContainer, what2hide;
+
+	// if map container doesn't exist, return. we might be trying to reset a container with id of an overlay
+	if( mapContainer === null ) {
+		return;
+	}
+
+	mapContentContainer = mapContainer.querySelector(selector);
 
 	if (mapContentContainer !== null) {
+		
 		what2hide = mapContentContainer.firstChild;
 		if (what2hide && footerContent) {
 			what2hide.style.display = 'none';

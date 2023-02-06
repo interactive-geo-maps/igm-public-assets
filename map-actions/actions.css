@@ -86,6 +86,51 @@ button.gclose {
 	display: none !important;
 }
 
+.glightbox-clean .gnext { 
+	top:48%;
+    right:0;
+}
+.glightbox-clean .gprev  {
+	top:48%;
+    left:0;
+}
+
+/* secondary close button */
+
+.gslide-media {
+    position:relative;
+}
+
+.gslide-media.gslide-external .igm_close {
+    right:20px;
+}
+
+.igm_close:hover {
+    opacity:1;
+}
+
+.igm_close {
+    font-family:Arial;
+    cursor:pointer;
+    position:absolute;
+    top:5px;
+    right:5px;
+    text-align:center;
+    background:#2c2b2b;
+    color:#fff;
+    width:20px;
+    height:20px;
+    font-size:12px;
+    line-height:22px;
+    border-radius:0px;
+    z-index:99;
+    opacity:0.5;
+}
+
+.igm_close + br {
+    display:none;
+}
+
 /* Map List */
 .igm_entries_list li:hover {
 	cursor: pointer;
