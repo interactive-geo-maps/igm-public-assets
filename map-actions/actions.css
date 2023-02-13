@@ -22,11 +22,6 @@
 	width: 66%;
 }
 
-/*
-.igm_content_right_1_3 {
-	width: 33%;
-}*/
-
 .map_wrapper:fullscreen .igm_content_right_1_3 {
 	background: #ffffffaf;
 	z-index: 10;

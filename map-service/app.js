@@ -983,8 +983,7 @@ iMapsModel.prepareColor = function (data) {
     var gradient, gradientType, gradientOffset, colourIndex;
     
     gradientType   = typeof igmGradientType !== 'undefined' ? igmGradientType : 'LinearGradient';
-    
-    gradientOffset = typeof igmGradientOffset !== 'undefined' && Array.isArray(igmGradientOffset) ? igmGradientOffset : null;
+    gradientOffset = typeof igmGradientOffset !== 'undefined' && Array.isArray(igmGradientOffset) ? igmGradientOffset : [];
 
     gradient = new am4core[gradientType]();
     colours.forEach(function(color, index){
@@ -1739,12 +1738,11 @@ iMapsManager.handleZoom = function (id) {
       fullScreenButton.id = '_fullscreen_button';
     }
 
-    /* 
-     * Solution for Firefox issue is here @pedro :)
+    // Solution for Firefox issue with button container
     map.events.on("inited", function () {
         fullScreenButton.deepInvalidate();
     });
-    */
+    
   }
 
   // pan events?
@@ -1938,11 +1936,11 @@ iMapsManager.pushSeries = function (id, data) {
     return;
   }
 
-  seriesById[data.id] = []; 
+  seriesById[data.id] = [];
   
   // check if it's set a map overlay by default
-  if (typeof parentData.liveFilter !== 'undefined' && parentData.liveFilter["default"] !== parentData.id) {
-    defaultSeries = parentData.liveFilter["default"];
+  if (typeof parentData.liveFilter !== 'undefined' && parseInt( parentData.liveFilter["default"] ) !== parentData.id) {
+    defaultSeries = parseInt( parentData.liveFilter["default"] );
     im.filteredMap = defaultSeries;
   } // setup series index
 
@@ -3153,16 +3151,38 @@ iMapsManager.setupTooltip = function (id, series, data, marker) {
   return series;
 };
 
-iMapsManager.parseHtmlEntities = function (str) {
+iMapsManager.prepareURL = function (str) {
 
   if (typeof str !== "string") {
-    return str;
+      return str;
   }
 
+  // parse html entities
   str = str.replace(/&amp;/gi, '&');
-  return str.replace(/&#(\d+);/g, function (match, dec) {
-    return String.fromCharCode(dec);
+  str.replace(/&#(\d+);/g, function (match, dec) {
+      return String.fromCharCode(dec);
   });
+
+  // check if allowed url
+  var url, protocols;
+  try {
+      url = new URL(str);
+  } catch (_) {
+      url = false;
+  }
+
+  // check if valid url. If string it might be a anchor or relative path, so keep going
+  if (url) {
+      // acepted protocols
+      protocols = [null, "http:", "https:", "mailto:", "tel:"];
+      if (!protocols.includes(url.protocol)) {
+          console.log('URL protocol not allowed');
+          return '';
+      }
+  }
+
+  return str;
+
 };
 
 iMapsManager.setupHitEvents = function (id, ev) {
@@ -3178,20 +3198,26 @@ iMapsManager.setupHitEvents = function (id, ev) {
     container = document.getElementById(data.container),
     event = new Event("mapEntryClicked");
 
-    if( map.lastClickedEntry === ev.target ){
+    if (ev.target.isLabels) {
+        dataContext = ev.target.dataItems.first.dataContext;
+    } else {
+        dataContext = ev.target.dataItem.dataContext;
+    } 
+
+    // on certain devices, the click gets triggered twice, so the 'hold click actions' won't work properly
+    // but we minize the issue by allowing it to run anyway
+    if( map.lastClickedEntry === ev.target && ! im.maps[id].clicked ){
+        // the clicked is used to control the "hold click actions" feature
+        im.maps[id].clicked = dataContext;
         return;
     }
 
+    // we reset it to null, in case it was clicked before, double tap
+    im.maps[id].clicked = null;
     map.lastClickedEntry = ev.target;
     container.dispatchEvent(event);
 
-  if (ev.target.isLabels) {
-    dataContext = ev.target.dataItems.first.dataContext;
-  } else {
-    dataContext = ev.target.dataItem.dataContext;
-  } // if it's a cluster, zoom in a bit
-
-
+  // if it's a cluster, zoom in a bit
   if (targetType === 'MapImage') {
     if (dataContext.cluster) {
       // if we're far from the max, let's just zoom half
@@ -3244,13 +3270,13 @@ iMapsManager.setupHitEvents = function (id, ev) {
 
 
   if (data.tooltip && _typeof(data.tooltip.enabled) !== undefined && im.bool(data.tooltip.enabled) && _typeof(data.tooltip.disableMobile) !== undefined && !im.bool(data.tooltip.disableMobile) && _typeof(data.tooltip.holdAction) !== undefined && im.bool(data.tooltip.holdAction) && window.innerWidth <= 780) {
-    if (!clicked || clicked != dataContext) {
+    if ( ! clicked || clicked !== dataContext ) {
       console.log('Holding action for second tap.');
       im.maps[id].clicked = dataContext;
       return;
-    } // in case the previously clicked will now perform action, we reset it
-
-
+    } 
+    
+    // in case the previously clicked will now perform action, we reset it
     if (clicked === dataContext) {
       im.maps[id].clicked = false;
     } // if it's a different one, set it normally
@@ -3259,15 +3285,20 @@ iMapsManager.setupHitEvents = function (id, ev) {
     }
   }
 
+
   if (dataContext.action === "none") {
-    // do nothing   
+    // do nothing
+    return;   
   } 
+
+  // check urls
+  if ( dataContext.action === "open_url" || dataContext.action === "open_url_new" ) {
+    dataContext.content = iMapsManager.prepareURL(dataContext.content);
+  }
   // open new url
-  else if (dataContext.action === "open_url" && dataContext.content !== "") {
-    dataContext.content = iMapsManager.parseHtmlEntities(dataContext.content);
+  if (dataContext.action === "open_url" && dataContext.content !== "") {
     document.location = dataContext.content;
   } else if (dataContext.action === "open_url_new" && dataContext.content !== "") {
-    dataContext.content = iMapsManager.parseHtmlEntities(dataContext.content);
     window.open(dataContext.content);
   } // custom
   else if (dataContext.action && dataContext.action.includes("custom")) {
@@ -3462,7 +3493,10 @@ iMapsManager.groupHit = function (id, ev) {
     if (!polygon.dataItem.dataContext.madeFromGeoData ) {
       // toggle active state
       polygon.setState("active");
-      polygon.isHover = true;
+
+      if( ev.target === polygon ) {
+        polygon.isHover = true;
+      }
 
       //removed to fix bug when hovering groups after clicked ?
       polygon.isActive = true;
