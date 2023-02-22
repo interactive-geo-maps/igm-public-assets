@@ -466,7 +466,7 @@ iMapsModel.prepareImageFields = function (data) {
 };
 
 iMapsModel.prepareGroupedRegions = function (data) {
-  var regions, tempRegion, group; // regions
+  var regions, tempRegion, group, groupIds; // regions
 
   if (Array.isArray(data.regions) && data.regions.length) {
 
@@ -484,18 +484,23 @@ iMapsModel.prepareGroupedRegions = function (data) {
     data.regions.map(function (region, index) {
       if (region.id && String(region.id).includes(",")) {
         group = [];
+		groupIds = [];
         regions = region.id.split(",");
         regions.forEach(function (reg, ix) {
-          tempRegion = Object.assign({}, region);
-          tempRegion.id = reg.trim();
-          tempRegion.originalID = region.id;
+        	tempRegion = Object.assign({}, region);
+        	tempRegion.id = reg.trim();
+        	tempRegion.originalID = region.id;
 
-          // check if numeric
-          if (!isNaN(tempRegion.id)) {
-            // tempRegion.id = parseFloat( tempRegion.id );
-          }
+        	// check if numeric
+        	if (!isNaN(tempRegion.id)) {
+        		// tempRegion.id = parseFloat( tempRegion.id );
+        	}
 
-          group.push(tempRegion);
+        	// check if not repeated
+        	if (!groupIds.includes(tempRegion.id)) {
+				groupIds.push(tempRegion.id);
+        		group.push(tempRegion);
+        	}
         });
 
         // add group to main data object
@@ -2302,9 +2307,9 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
   // enable small map
   if (im.bool(data.smallMap)) {
     map.smallMap.series.push(regionSeries);
-  } // auto Labels in progress
-
-
+  } 
+  
+  // auto Labels in progress
   if (data.regionLabels && im.bool(data.regionLabels.source)) {
     regionSeries.calculateVisualCenter = true; // Configure label series
 
@@ -2411,7 +2416,14 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
 
     var regionLabelCustomCoordinates = im.isJSON(data.regionLabels.regionLabelCustomCoordinates) ? JSON.parse(data.regionLabels.regionLabelCustomCoordinates) : false;
     regionSeries.events.on("inited", function () {
+	  var regionCheck = [];
       regionSeries.mapPolygons.each(function (polygon) {
+		
+		// if they are not displaying with lat/long, skip
+		if( typeof polygon.visualLatitude === 'undefined' ){
+			return;
+		}
+		
         var label = labelSeries.mapImages.create(),
           text; // if we're only adding labels to active regions
 
@@ -3186,31 +3198,40 @@ iMapsManager.prepareURL = function (str) {
 };
 
 iMapsManager.setupHitEvents = function (id, ev) {
-  var im = this,
-    data = im.maps[id].data,
-    dataContext,
-    map = im.maps[id].map,
-    customActionName,
-    targetType = im.getTargetSeriesType(ev.target),
-    clicked = im.maps[id].clicked || false,
-    zoomCluster = data.clusterMarkers ? parseFloat(data.clusterMarkers.zoomLevel) : 1,
-    currentRegion, mapFunction, 
-    container = document.getElementById(data.container),
-    event = new Event("mapEntryClicked");
+	var im = this,
+	data = im.maps[id].data,
+	dataContext,
+	map = im.maps[id].map,
+	customActionName,
+	targetType = im.getTargetSeriesType(ev.target),
+	clicked = im.maps[id].clicked || false,
+	zoomCluster = data.clusterMarkers ? parseFloat(data.clusterMarkers.zoomLevel) : 1,
+	currentRegion, mapFunction,
+	container = document.getElementById(data.container),
+	event = new Event("mapEntryClicked");
 
-    if (ev.target.isLabels) {
-        dataContext = ev.target.dataItems.first.dataContext;
-    } else {
-        dataContext = ev.target.dataItem.dataContext;
-    } 
+	if (ev.target.isLabels) {
+		dataContext = ev.target.dataItems.first.dataContext;
+	} else {
+		dataContext = ev.target.dataItem.dataContext;
+	}
 
-    // on certain devices, the click gets triggered twice, so the 'hold click actions' won't work properly
-    // but we minize the issue by allowing it to run anyway
-    if( map.lastClickedEntry === ev.target && ! im.maps[id].clicked ){
-        // the clicked is used to control the "hold click actions" feature
-        im.maps[id].clicked = dataContext;
-        return;
-    }
+	// on certain devices, the click gets triggered twice, so the 'hold click actions' won't work properly
+	// but we minize the issue by allowing it to run anyway - so on devices where the tap runs twice, the hold won't work at the moment
+	if (map.lastClickedEntry === ev.target && !im.maps[id].clicked) {
+		// the clicked is used to control the "hold click actions" feature
+		im.maps[id].clicked = dataContext;
+
+		// we reset after 1 second, to allow real second clicks to run
+		// this also has the side effect that when the 'hold click actions' is enabled, only after 1 second, the second tap will actually work
+		setTimeout(function () {
+			map.lastClickedEntry = null;
+			im.maps[id].clicked = null;
+		}, 1000);
+
+		return;
+	}
+
 
     // we reset it to null, in case it was clicked before, double tap
     im.maps[id].clicked = null;
