@@ -138,7 +138,9 @@ iMapsActions.buildDropdown = function (el) {
 			shouldSort: true
 		},
 		searchFloor: 2,
-		searchResultLimit: 50, // maybe set this as an option?
+		searchResultLimit: 50,
+		searchFields: [ 'label', 'value', 'customProperties' ]
+
 	};
 
 	var choices = new Choices(el, opts);

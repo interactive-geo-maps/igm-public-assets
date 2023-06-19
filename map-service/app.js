@@ -1632,6 +1632,12 @@ iMapsManager.handleZoom = function (id) {
 		map.seriesContainer.draggable = data.zoom ? im.bool(data.zoom.draggable) : false;
 		map.seriesContainer.resizable = data.zoom ? im.bool(data.zoom.draggable) : false; // don't zoom out to center
 
+		if (im.bool(data.zoom.draggable)) {
+			// in case we want to show the grab hand on mousehover also
+			//map.seriesContainer.cursorOverStyle = am4core.MouseCursorStyle.grab;
+			map.seriesContainer.cursorDownStyle = am4core.MouseCursorStyle.grabbing;
+		}
+
 		// control zoom and pan behaviour
 		map.centerMapOnZoomOut = false;
 		map.maxPanOut = 0;
@@ -2322,8 +2328,9 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
 
 	// auto Labels
 	if (data.regionLabels && im.bool(data.regionLabels.source)) {
-		regionSeries.calculateVisualCenter = true; // Configure label series
+		regionSeries.calculateVisualCenter = true;
 
+		// Configure label series
 		var labelSeries = map.series.push(new am4maps.MapImageSeries());
 		var labelTemplate = labelSeries.mapImages.template.createChild(am4core.Label);
 
@@ -2361,8 +2368,8 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
 		});
 		regionSeries.events.on("shown", function (ev) {
 			labelSeries.show();
-		}); // label events
-
+		});
+		// label events
 		labelTemplate.events.on("hit", function (ev) {
 			clkLabel = regionSeries.getPolygonById(ev.target.parent.LabelForRegion);
 			clkLabel.dispatchImmediately("hit");
@@ -2373,6 +2380,8 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
 		labelTemplate.events.on("out", function (ev) {
 			iMapsManager.clearHovered(id, ev.target.parent.LabelForRegion);
 		});
+
+
 		im.setupTooltip(id, labelSeries, data, labelTemplate);
 		labelTemplate.interactionsEnabled = true;
 		labelTemplate.nonScaling = im.bool(data.regionLabels.nonScaling);
@@ -2383,7 +2392,9 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
 				labelSeries.hide();
 				labelSeries.hidden = true;
 			}
-		}); // set labels drag listener
+		});
+
+		// set labels drag listener
 		// allow labels to be dragged if in admin
 
 		if (im.bool(data.admin)) {
@@ -2426,16 +2437,16 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
 				ev.target.cursorOverStyle = am4core.MouseCursorStyle.grabbing;
 			});
 		} // end dragevent
+
+
 		// convert custom json position string to object
-
-
 		var regionLabelCustomCoordinates = im.isJSON(data.regionLabels.regionLabelCustomCoordinates) ? JSON.parse(data.regionLabels.regionLabelCustomCoordinates) : false;
 		regionSeries.events.on("inited", function () {
 			var regionCheck = [];
 			regionSeries.mapPolygons.each(function (polygon) {
 
-				// if they are not displaying with lat/long, skip
-				if (typeof polygon.visualLatitude === 'undefined') {
+				// if they are not displaying with lat/long, skip, unless we're using a custom map
+				if (data.map !== 'custom' && typeof polygon.visualLatitude === 'undefined') {
 					return;
 				}
 
@@ -2481,15 +2492,17 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
 
 				if (polygon.dataItem.dataContext.action && polygon.dataItem.dataContext.action !== "none") {
 					label.cursorOverStyle = am4core.MouseCursorStyle.pointer;
-				} // use custom coordinates adjustments or use auto position
+				}
 
-
+				// use custom coordinates adjustments or use auto position
 				if (regionLabelCustomCoordinates && regionLabelCustomCoordinates.hasOwnProperty(polygon.dataItem.dataContext.id)) {
 					label.latitude = regionLabelCustomCoordinates[polygon.dataItem.dataContext.id].latitude;
 					label.longitude = regionLabelCustomCoordinates[polygon.dataItem.dataContext.id].longitude;
 				} else {
-					label.latitude = polygon.visualLatitude;
-					label.longitude = polygon.visualLongitude;
+					if (polygon.visualLatitude) {
+						label.latitude = polygon.visualLatitude;
+						label.longitude = polygon.visualLongitude;
+					}
 				}
 
 				if (label.children.getIndex(0)) {
@@ -2497,7 +2510,9 @@ iMapsManager.pushRegionSeries = function (id, data, groupHover) {
 				}
 			});
 		});
-	} // if the external dropdown is enabled, calculate visual center
+	}
+
+	// if the external dropdown is enabled, calculate visual center
 
 
 	if (typeof data.externalDropdown !== 'undefined' && im.bool(data.externalDropdown.enabled)) {
@@ -2528,6 +2543,7 @@ iMapsManager.pushRoundMarkerSeries = function (id, data) {
 		markerSeries.hiddenInLegend = data.roundMarkersLegend ? !im.bool(data.roundMarkersLegend.enabled) : false; // Create a circle image in image series template so it gets replicated to all new images
 
 		markerSeriesTemplate = markerSeries.mapImages.template;
+
 		circle = markerSeriesTemplate.createChild(am4core.Circle);
 		im.setupTooltip(id, markerSeries, data, circle); // default values
 
@@ -2598,9 +2614,12 @@ iMapsManager.pushRoundMarkerSeries = function (id, data) {
 		if (data.roundMarkerLabels && im.bool(data.roundMarkerLabels.enabled)) {
 
 			var markerLabel = markerSeriesTemplate.createChild(am4core.Label);
+			var markerLabelPosition = typeof data.roundMarkerLabels.position !== "undefined" && data.roundMarkerLabels.position !== '' ? data.roundMarkerLabels.position : "bottom";
 			markerLabel.text = typeof data.roundMarkerLabels.source !== "undefined" && data.roundMarkerLabels.source !== '' ? data.roundMarkerLabels.source : "{name}";
-			markerLabel.horizontalCenter = "middle";
 			markerLabel.fontSize = data.roundMarkerLabels.fontSize;
+
+			// set state on parent
+			markerLabel.setStateOnChildren = true;
 
 			//for mobile devices
 			if (data.roundMarkerLabels.mobileSize && parseInt(data.roundMarkerLabels.mobileSize) !== 100) {
@@ -2616,17 +2635,39 @@ iMapsManager.pushRoundMarkerSeries = function (id, data) {
 			markerLabel.clickable = false;
 			markerLabel.focusable = false;
 			markerLabel.hoverable = false;
+
+			// control position
 			markerLabel.padding(0, 0, 0, 0);
-			markerLabel.propertyFields.paddingTop = "radius";
-			/*
-			markerLabel.adapter.add("dy", function (dy, target) {
-				var circle = target.parent.children.getIndex(0);
-				return circle.pixelRadius;
-			});
-			*/
-		} // Add data
 
+			// this is a first iteration of this feature
+			// in the future we can have the position individually for each marker and use the propertyFields approach
+			if (markerLabelPosition === "bottom") {
+				markerLabel.horizontalCenter = "middle";
+				markerLabel.verticalCenter = "top";
+				markerLabel.propertyFields.paddingTop = "radius";
+			}
 
+			if (markerLabelPosition === "top") {
+				markerLabel.horizontalCenter = "middle";
+				markerLabel.verticalCenter = "bottom";
+				markerLabel.propertyFields.paddingBottom = "radius";
+			}
+
+			if (markerLabelPosition === "right") {
+				markerLabel.horizontalCenter = "left";
+				markerLabel.verticalCenter = "middle";
+				markerLabel.propertyFields.paddingLeft = "radius";
+			}
+
+			if (markerLabelPosition === "left") {
+				markerLabel.horizontalCenter = "right";
+				markerLabel.verticalCenter = "middle";
+				markerLabel.propertyFields.paddingRight = "radius";
+			}
+
+		}
+
+		// Add data
 		markerSeries.data = data.roundMarkers; // For legend color
 
 		markerSeries.fill = data.markerDefaults.fill; // Events
@@ -3094,6 +3135,7 @@ iMapsManager.setupTooltip = function (id, series, data, marker) {
 		series.tooltip.maxWidth = parseInt(tooltip.maxWidth);
 		series.tooltip.contentWidth = parseInt(tooltip.maxWidth);
 	}
+	series.tooltip.label.wrap = true;
 
 	// box-shadow
 	if (typeof tooltip.customShadow !== 'undefined' && im.bool(tooltip.customShadow)) {
@@ -3112,8 +3154,8 @@ iMapsManager.setupTooltip = function (id, series, data, marker) {
 			//allow tooltip to be hidden outside viewport
 			series.tooltip.ignoreBounds = true;
 
-			series.tooltip.pointerOrientation = ( function( toolTipPosition ) {
-				switch ( toolTipPosition ) {
+			series.tooltip.pointerOrientation = (function (toolTipPosition) {
+				switch (toolTipPosition) {
 					case 'horizontal':
 						return 'horizontal'
 					case 'below':
@@ -3128,7 +3170,7 @@ iMapsManager.setupTooltip = function (id, series, data, marker) {
 						return 'vertical'
 				}
 
-			} )( tooltip.toolTipPosition );
+			})(tooltip.toolTipPosition);
 		}
 
 		if (series.mapPolygons) {
@@ -3431,6 +3473,20 @@ iMapsManager.zoomToRegion = function (ev, id) {
 				latitude: -28.6,
 				longitude: 24.7
 			}, 12.2, true);
+		} else if (dataContext.id === "US" && data.map.startsWith('world')) {
+
+			ev.target.series.chart.zoomToGeoPoint({
+				latitude: 49,
+				longitude: -119
+			}, 2.6, true);
+
+		} else if (dataContext.id === "RU" && data.map.startsWith('world')) {
+
+			ev.target.series.chart.zoomToGeoPoint({
+				latitude: 64.5,
+				longitude: 105
+			}, 2.1, true);
+
 		} else {
 			if (typeof ev.target.series.chart.deltaLongitudeOriginal !== 'undefined') {
 				ev.target.series.chart.deltaLongitude = ev.target.series.chart.deltaLongitude;
